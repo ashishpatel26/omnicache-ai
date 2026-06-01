@@ -32,13 +32,15 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Lint with ruff
+      - name: Run pre-commit (lint + format + mypy)
+        run: uv run pre-commit run --all-files
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+
+      - name: Lint with ruff (other matrix legs)
         run: |
           uv run ruff check omnicache_ai/ tests/
           uv run ruff format --check omnicache_ai/ tests/
-
-      - name: Type check with mypy
-        run: uv run mypy omnicache_ai/ --ignore-missing-imports
+        if: "!(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12')"
 
       - name: Run tests
         run: uv run pytest --cov=omnicache_ai --cov-report=term-missing -q
