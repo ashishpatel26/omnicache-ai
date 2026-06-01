@@ -10,6 +10,7 @@ const sidebars: SidebarsConfig = {
         'getting-started/installation',
         'getting-started/quickstart',
         'getting-started/configuration',
+        'getting-started/deployment',
       ],
     },
     {
@@ -105,6 +106,8 @@ const sidebars: SidebarsConfig = {
         'cookbook/crewai',
         'cookbook/agno',
         'cookbook/a2a',
+        'cookbook/openai-sdk',
+        'cookbook/anthropic-sdk',
         'cookbook/google-adk',
         'cookbook/openai-agents',
         'cookbook/llamaindex',
