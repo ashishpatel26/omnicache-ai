@@ -391,12 +391,6 @@ uv add 'omnicache-ai[langchain,redis]'
 uv add 'omnicache-ai[all]'
 ```
 
-### conda
-
-```bash
-conda install -c conda-forge omnicache-ai
-```
-
 ### From source
 
 ```bash
@@ -410,7 +404,7 @@ uv run pytest         # verify install
 
 ```bash
 python -c "import omnicache_ai; print(omnicache_ai.__version__)"
-# 0.2.0
+# 0.3.0
 ```
 
 ### Environment variable configuration
