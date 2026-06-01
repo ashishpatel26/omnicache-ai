@@ -16,7 +16,7 @@ The core module is the foundation of OmniCache-AI — the central orchestrator, 
 | [CacheKeyBuilder](key-builder.md) | `omnicache_ai.core.key_builder` | `namespace:type:sha256[:16]` canonical keys |
 | [CacheMetrics](metrics.md) | `omnicache_ai.core.metrics` | Hit/miss/eviction counters + provider cache savings |
 | [Serializer](serializer.md) | `omnicache_ai.core.serializer` | Pluggable encode/decode — `PickleSerializer`, `JsonSerializer` |
-| [Compressor](../getting-started/configuration.md) | `omnicache_ai.core.compressor` | Optional compression — `GzipCompressor`, `NoopCompressor` |
+| [Compressor](compressor.md) | `omnicache_ai.core.compressor` | Optional compression — `GzipCompressor`, `NoopCompressor` |
 | [StampedeShield](stampede.md) | `omnicache_ai.core.stampede` | Per-key lock — prevents concurrent duplicate LLM calls |
 | [RequestConfig](request-config.md) | `omnicache_ai.core.request_config` | Per-request TTL / threshold / `skip_cache` overrides |
 | [CacheWarmer](warmer.md) | `omnicache_ai.core.warmer` | Bulk warm from query lists or CSV |
