@@ -2,9 +2,6 @@
 title: "Installation"
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 # Installation
 
 ## Requirements
@@ -14,50 +11,7 @@ import TabItem from '@theme/TabItem';
 
 ---
 
-## Install from GitHub (available now)
-
-<Tabs>
-<TabItem value="pip" label="pip">
-
-```bash
-pip install git+https://github.com/ashishpatel26/omnicache-ai.git
-```
-
-</TabItem>
-
-</Tabs>
-
-
-<Tabs>
-<TabItem value="uv" label="uv">
-
-```bash
-uv add git+https://github.com/ashishpatel26/omnicache-ai.git
-```
-
-</TabItem>
-
-</Tabs>
-
-
-<Tabs>
-<TabItem value="with-extras" label="With extras">
-
-```bash
-pip install "omnicache-ai[langchain,redis] @ git+https://github.com/ashishpatel26/omnicache-ai.git"
-```
-
-</TabItem>
-
-</Tabs>
-
-
----
-
-## Install from PyPI (coming soon)
-
-<Tabs>
-<TabItem value="pip" label="pip">
+## Install from PyPI
 
 ```bash
 # Core (in-memory + disk backends)
@@ -66,6 +20,7 @@ pip install omnicache-ai
 # With framework adapters
 pip install 'omnicache-ai[langchain]'
 pip install 'omnicache-ai[langgraph]'
+pip install 'omnicache-ai[autogen]'
 pip install 'omnicache-ai[crewai]'
 pip install 'omnicache-ai[agno]'
 
@@ -78,36 +33,13 @@ pip install 'omnicache-ai[vector-chroma]'
 pip install 'omnicache-ai[all]'
 ```
 
-</TabItem>
-
-</Tabs>
-
-
-<Tabs>
-<TabItem value="uv" label="uv">
+### uv
 
 ```bash
 uv add omnicache-ai
 uv add 'omnicache-ai[langchain,redis]'
 uv add 'omnicache-ai[all]'
 ```
-
-</TabItem>
-
-</Tabs>
-
-
-<Tabs>
-<TabItem value="conda" label="conda">
-
-```bash
-conda install -c conda-forge omnicache-ai
-```
-
-</TabItem>
-
-</Tabs>
-
 
 ---
 
@@ -126,7 +58,7 @@ uv run pytest  # verify install
 
 ```bash
 python -c "import omnicache_ai; print(omnicache_ai.__version__)"
-# 0.1.0
+# 0.2.0
 ```
 
 ---
@@ -143,10 +75,16 @@ python -c "import omnicache_ai; print(omnicache_ai.__version__)"
 | `autogen` | `pyautogen>=0.2` | AutoGen 0.2.x adapter |
 | `crewai` | `crewai>=0.28` | CrewAI kickoff adapter |
 | `agno` | `agno>=0.1` | Agno agent adapter |
+| `openai` | `openai>=1.0` | OpenAI SDK adapter |
+| `anthropic` | `anthropic>=0.25` | Anthropic SDK adapter |
 
-:::tip[AutoGen 0.4+]
-For the new AutoGen API, install `autogen-agentchat>=0.4` separately:
+> **AutoGen 0.4+**: install `autogen-agentchat>=0.4` separately — it ships as its own package.
+
+---
+
+## Docker
+
 ```bash
-pip install 'autogen-agentchat>=0.4' omnicache-ai
+docker build -t omnicache-ai .
+docker run --rm omnicache-ai
 ```
-:::

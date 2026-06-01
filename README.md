@@ -56,28 +56,33 @@ Every AI agent pipeline makes the same expensive calls repeatedly:
 
 ### Cache Layers
 
-| Layer           | Class            | What it caches                                                       | Serialization  |
-| --------------- | ---------------- | -------------------------------------------------------------------- | -------------- |
-| LLM Response    | `ResponseCache`  | Model output keyed by model + messages + params                      | pickle         |
-| Embeddings      | `EmbeddingCache` | `np.ndarray` vectors keyed by model + text                           | `np.tobytes()` |
-| Retrieval       | `RetrievalCache` | Document lists keyed by query + retriever + top-k                    | pickle         |
-| Context/Session | `ContextCache`   | Conversation turns keyed by session ID + turn index                  | pickle         |
-| Semantic        | `SemanticCache`  | Answers reused for semantically similar queries (cosine ≥ threshold) | pickle         |
+| Layer           | Class                   | What it caches                                                       | Serialization  |
+| --------------- | ----------------------- | -------------------------------------------------------------------- | -------------- |
+| LLM Response    | `ResponseCache`         | Model output keyed by model + messages + params                      | pluggable      |
+| Embeddings      | `EmbeddingCache`        | `np.ndarray` vectors keyed by model + text                           | `np.tobytes()` |
+| Retrieval       | `RetrievalCache`        | Document lists keyed by query + retriever + top-k                    | pluggable      |
+| Context/Session | `ContextCache`          | Conversation turns keyed by session ID + turn index                  | pluggable      |
+| Semantic        | `SemanticCache`         | Answers reused for semantically similar queries (cosine ≥ threshold) | pluggable      |
+| Streaming       | `StreamingResponseCache`| Buffers streamed LLM chunks; replays from cache as generator         | pluggable      |
 
 ### Storage Backends
 
-| Backend         | Class             | Extras            | Best For                           |
-| --------------- | ----------------- | ----------------- | ---------------------------------- |
-| In-Memory (LRU) | `InMemoryBackend` | — (core)          | Dev, testing, single-process       |
-| Disk            | `DiskBackend`     | — (core)          | Persistent, single-machine         |
-| Redis           | `RedisBackend`    | `[redis]`         | Shared across processes / services |
-| FAISS           | `FAISSBackend`    | `[vector-faiss]`  | High-speed vector similarity       |
-| ChromaDB        | `ChromaBackend`   | `[vector-chroma]` | Persistent vector store + metadata |
+| Backend              | Class                 | Extras            | Best For                           |
+| -------------------- | --------------------- | ----------------- | ---------------------------------- |
+| In-Memory (LRU)      | `InMemoryBackend`     | — (core)          | Dev, testing, single-process       |
+| Async In-Memory      | `AsyncInMemoryBackend`| — (core)          | FastAPI, async frameworks          |
+| Disk                 | `DiskBackend`         | — (core)          | Persistent, single-machine         |
+| Redis                | `RedisBackend`        | `[redis]`         | Shared across processes / services |
+| Tiered (L1 + L2)     | `TieredBackend`       | — (core)          | Memory speed + Redis persistence   |
+| FAISS                | `FAISSBackend`        | `[vector-faiss]`  | High-speed vector similarity       |
+| ChromaDB             | `ChromaBackend`       | `[vector-chroma]` | Persistent vector store + metadata |
 
 ### Framework Adapters
 
 | Framework             | Class                   | Hook Point                                           | Async                             |
 | --------------------- | ----------------------- | ---------------------------------------------------- | --------------------------------- |
+| OpenAI SDK            | `OpenAICacheAdapter`    | `client.chat.completions.create`                     | ✅`achat_create`                  |
+| Anthropic SDK         | `AnthropicCacheAdapter` | `client.messages.create`                             | ✅`amessages_create`              |
 | LangChain ≥ 0.2       | `LangChainCacheAdapter` | `BaseCache` — `lookup` / `update`                    | ✅`alookup` / `aupdate`           |
 | LangGraph ≥ 0.1 / 1.x | `LangGraphCacheAdapter` | `BaseCheckpointSaver` — `get_tuple` / `put` / `list` | ✅`aget_tuple` / `aput` / `alist` |
 | AutoGen ≥ 0.4         | `AutoGenCacheAdapter`   | `AssistantAgent.run()` / `arun()`                    | ✅`arun`                          |
@@ -97,14 +102,18 @@ Every AI agent pipeline makes the same expensive calls repeatedly:
 
 ### Core Engine
 
-| Component    | Class                | Description                                                        |
-| ------------ | -------------------- | ------------------------------------------------------------------ |
-| Orchestrator | `CacheManager`       | Central hub — wires backend, key builder, TTL policy, invalidation |
-| Key Builder  | `CacheKeyBuilder`    | `namespace:type:sha256[:16]` canonical keys                        |
-| TTL Policy   | `TTLPolicy`          | Global + per-layer TTL overrides                                   |
-| Eviction     | `EvictionPolicy`     | LRU / LFU / TTL-only strategies                                    |
-| Invalidation | `InvalidationEngine` | Tag-based bulk eviction                                            |
-| Settings     | `OmnicacheSettings`  | Dataclass +`from_env()` for 12-factor config                       |
+| Component        | Class                | Description                                                              |
+| ---------------- | -------------------- | ------------------------------------------------------------------------ |
+| Orchestrator     | `CacheManager`       | Central hub — wires backend, key builder, TTL policy, invalidation       |
+| Key Builder      | `CacheKeyBuilder`    | `namespace:type:sha256[:16]` canonical keys                              |
+| Metrics          | `CacheMetrics`       | Thread-safe hit/miss/eviction counters + `hit_rate` property             |
+| Serializer       | `Serializer`         | Pluggable encode/decode — `PickleSerializer` (default), `JsonSerializer` |
+| Compressor       | `Compressor`         | Optional compression — `GzipCompressor`, `NoopCompressor` (default)     |
+| Stampede Shield  | `StampedeShield`     | Per-key `threading.Lock` prevents concurrent duplicate LLM calls         |
+| TTL Policy       | `TTLPolicy`          | Global + per-layer TTL overrides                                         |
+| Eviction         | `EvictionPolicy`     | LRU / TTL-only strategies, wired into `InMemoryBackend`                  |
+| Invalidation     | `InvalidationEngine` | Tag-based bulk eviction                                                  |
+| Settings         | `OmnicacheSettings`  | Dataclass + `from_env()` for 12-factor config                            |
 
 ---
 
@@ -278,23 +287,7 @@ flowchart TD
 - Python ≥ 3.12
 - Core dependencies: `diskcache`, `numpy` (installed automatically)
 
-### Install from GitHub (recommended — available now)
-
-```bash
-# pip — core (in-memory + disk backends)
-pip install git+https://github.com/ashishpatel26/omnicache-ai.git
-
-# pip — with extras
-pip install "omnicache-ai[langchain,redis] @ git+https://github.com/ashishpatel26/omnicache-ai.git"
-
-# uv — core
-uv add git+https://github.com/ashishpatel26/omnicache-ai.git
-
-# uv — with extras
-uv pip install "omnicache-ai[langchain,redis] @ git+https://github.com/ashishpatel26/omnicache-ai.git"
-```
-
-### pip (PyPI — coming soon)
+### pip (PyPI)
 
 ```bash
 # Minimal — in-memory + disk backends
@@ -349,7 +342,7 @@ uv run pytest         # verify install
 
 ```bash
 python -c "import omnicache_ai; print(omnicache_ai.__version__)"
-# 0.1.0
+# 0.2.0
 ```
 
 ### Environment variable configuration
@@ -597,6 +590,48 @@ response = cached.run("Summarize the latest AI research")
 response = await cached.arun("Summarize the latest AI research")
 ```
 
+### OpenAI SDK
+
+```python
+import openai
+from omnicache_ai.adapters.openai_adapter import OpenAICacheAdapter
+
+client = openai.OpenAI()
+adapter = OpenAICacheAdapter(client, manager)
+
+response = adapter.chat_create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello"}],
+)
+# Second call with identical args returns instantly from cache
+
+# Async
+client = openai.AsyncOpenAI()
+adapter = OpenAICacheAdapter(client, manager)
+response = await adapter.achat_create(model="gpt-4o", messages=[...])
+```
+
+### Anthropic SDK
+
+```python
+import anthropic
+from omnicache_ai.adapters.anthropic_adapter import AnthropicCacheAdapter
+
+client = anthropic.Anthropic()
+adapter = AnthropicCacheAdapter(client, manager)
+
+response = adapter.messages_create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello"}],
+)
+
+# Async
+client = anthropic.AsyncAnthropic()
+adapter = AnthropicCacheAdapter(client, manager)
+response = await adapter.amessages_create(model="claude-sonnet-4-6", ...)
+```
+
 ### A2A (Agent-to-Agent)
 
 ```python
@@ -612,6 +647,91 @@ result = await adapter.aprocess(async_handler, task_payload)
 @adapter.wrap
 def handle_task(payload: dict) -> dict:
     return downstream_agent.process(payload)
+```
+
+---
+
+## v0.2.0 Features
+
+### Cache Metrics
+
+```python
+manager = CacheManager(backend=InMemoryBackend(), key_builder=CacheKeyBuilder())
+
+manager.get("key")          # miss
+manager.set("key", "val")
+manager.get("key")          # hit
+
+print(manager.metrics.snapshot())
+# {'hits': 1, 'misses': 1, 'evictions': 0, 'sets': 1, 'hit_rate': 0.5, 'miss_rate': 0.5}
+```
+
+### Pluggable Serializer
+
+```python
+from omnicache_ai import JsonSerializer, ResponseCache
+
+# Use JSON instead of pickle (safer for Redis with untrusted data)
+cache = ResponseCache(manager, serializer=JsonSerializer())
+```
+
+### Stampede Protection
+
+`ResponseCache.get_or_generate()` uses a per-key lock automatically — under concurrency, only one thread calls the LLM; others wait and read from cache.
+
+### Tiered Backend (L1 + L2)
+
+```python
+from omnicache_ai import TieredBackend, InMemoryBackend
+from omnicache_ai.backends.redis_backend import RedisBackend
+
+backend = TieredBackend(
+    l1=InMemoryBackend(max_size=1000),   # fast, local
+    l2=RedisBackend(url="redis://..."),  # persistent, shared
+    l1_ttl=300,                          # 5-min local copy
+)
+manager = CacheManager(backend=backend, key_builder=CacheKeyBuilder())
+```
+
+### Compression
+
+```python
+from omnicache_ai import GzipCompressor, CacheManager
+
+manager = CacheManager(
+    backend=InMemoryBackend(),
+    key_builder=CacheKeyBuilder(),
+    compressor=GzipCompressor(level=6),  # compress all stored bytes
+)
+```
+
+### Streaming Response Cache
+
+```python
+from omnicache_ai import StreamingResponseCache
+
+stream_cache = StreamingResponseCache(manager)
+
+def stream_fn(messages):
+    return openai_client.chat.completions.create(
+        model="gpt-4o", messages=messages, stream=True
+    )
+
+# First call: live stream + buffered to cache
+# Second call: replays chunks from cache at full speed
+for chunk in stream_cache.get_or_stream(messages, stream_fn, model_id="gpt-4o"):
+    print(chunk.choices[0].delta.content or "", end="", flush=True)
+```
+
+### Async Backend
+
+```python
+from omnicache_ai import AsyncInMemoryBackend
+
+# Use in async frameworks — does not block the event loop
+backend = AsyncInMemoryBackend(max_size=10_000)
+value = await backend.get("key")
+await backend.set("key", "value", ttl=60)
 ```
 
 ---
@@ -688,38 +808,48 @@ assert isinstance(MyBackend(), CacheBackend)  # True
 
 ```
 omnicache_ai/
-├── __init__.py                 # Public API surface
-├── __main__.py                 # CLI entry point (omnicache)
+├── __init__.py                   # Public API surface (28 exports)
+├── __main__.py                   # CLI: stats | flush | inspect <key>
 ├── config/
-│   └── settings.py             # OmnicacheSettings dataclass + from_env()
+│   └── settings.py               # OmnicacheSettings dataclass + from_env()
 ├── backends/
-│   ├── base.py                 # CacheBackend + VectorBackend Protocols
-│   ├── memory_backend.py       # InMemoryBackend (LRU, thread-safe, RLock)
-│   ├── disk_backend.py         # DiskBackend (diskcache, process-safe)
-│   ├── redis_backend.py        # RedisBackend [optional: redis]
-│   └── vector_backend.py       # FAISSBackend + ChromaBackend [optional]
+│   ├── base.py                   # CacheBackend + VectorBackend Protocols
+│   ├── async_base.py             # AsyncCacheBackend Protocol
+│   ├── memory_backend.py         # InMemoryBackend (LRU, thread-safe, RLock)
+│   ├── async_memory_backend.py   # AsyncInMemoryBackend (asyncio.Lock)
+│   ├── disk_backend.py           # DiskBackend (diskcache, process-safe)
+│   ├── redis_backend.py          # RedisBackend [optional: redis]
+│   ├── tiered_backend.py         # TieredBackend (L1 memory + L2 any backend)
+│   └── vector_backend.py         # FAISSBackend + ChromaBackend [optional]
 ├── core/
-│   ├── key_builder.py          # namespace:type:sha256[:16] canonical keys
-│   ├── policies.py             # TTLPolicy, EvictionPolicy
-│   ├── invalidation.py         # Tag-based InvalidationEngine
-│   └── cache_manager.py        # Central orchestrator + from_settings()
+│   ├── key_builder.py            # namespace:type:sha256[:16] canonical keys
+│   ├── metrics.py                # CacheMetrics (hits/misses/evictions/hit_rate)
+│   ├── serializer.py             # Serializer protocol, PickleSerializer, JsonSerializer
+│   ├── compressor.py             # Compressor protocol, GzipCompressor, NoopCompressor
+│   ├── stampede.py               # StampedeShield (per-key threading.Lock)
+│   ├── policies.py               # TTLPolicy, EvictionPolicy (wired into InMemoryBackend)
+│   ├── invalidation.py           # Tag-based InvalidationEngine
+│   └── cache_manager.py          # Central orchestrator + from_settings()
 ├── layers/
-│   ├── embedding_cache.py      # np.ndarray ↔ bytes serialization
-│   ├── retrieval_cache.py      # list[Document] via pickle
-│   ├── context_cache.py        # session_id + turn_index keyed
-│   ├── response_cache.py       # model + messages + params keyed
-│   └── semantic_cache.py       # exact → vector two-tier lookup
+│   ├── embedding_cache.py        # np.ndarray ↔ bytes serialization
+│   ├── retrieval_cache.py        # list[Document], pluggable serializer
+│   ├── context_cache.py          # session_id + turn_index keyed
+│   ├── response_cache.py         # model + messages + params keyed, stampede-safe
+│   ├── semantic_cache.py         # exact → vector two-tier lookup
+│   └── streaming_cache.py        # StreamingResponseCache (sync + async generators)
 ├── middleware/
-│   ├── llm_middleware.py       # LLMMiddleware + AsyncLLMMiddleware
-│   ├── embedding_middleware.py # EmbeddingMiddleware
-│   └── retriever_middleware.py # RetrieverMiddleware
+│   ├── llm_middleware.py         # LLMMiddleware + AsyncLLMMiddleware
+│   ├── embedding_middleware.py   # EmbeddingMiddleware
+│   └── retriever_middleware.py   # RetrieverMiddleware
 └── adapters/
-    ├── langchain_adapter.py    # BaseCache (lookup/update/alookup/aupdate)
-    ├── langgraph_adapter.py    # BaseCheckpointSaver (get_tuple/put/list + async)
-    ├── autogen_adapter.py      # AssistantAgent 0.4+ + ConversableAgent 0.2.x
-    ├── crewai_adapter.py       # Crew.kickoff() + kickoff_async()
-    ├── agno_adapter.py         # Agent.run() + arun()
-    └── a2a_adapter.py          # process() + aprocess() + @wrap
+    ├── openai_adapter.py         # OpenAICacheAdapter (chat.completions.create)
+    ├── anthropic_adapter.py      # AnthropicCacheAdapter (messages.create)
+    ├── langchain_adapter.py      # BaseCache (lookup/update/alookup/aupdate)
+    ├── langgraph_adapter.py      # BaseCheckpointSaver (get_tuple/put/list + async)
+    ├── autogen_adapter.py        # AssistantAgent 0.4+ + ConversableAgent 0.2.x
+    ├── crewai_adapter.py         # Crew.kickoff() + kickoff_async()
+    ├── agno_adapter.py           # Agent.run() + arun()
+    └── a2a_adapter.py            # process() + aprocess() + @wrap
 ```
 
 ---
