@@ -56,40 +56,49 @@ Every AI agent pipeline makes the same expensive calls repeatedly:
 
 ### Cache Layers
 
-| Layer           | Class                   | What it caches                                                       | Serialization  |
-| --------------- | ----------------------- | -------------------------------------------------------------------- | -------------- |
-| LLM Response    | `ResponseCache`         | Model output keyed by model + messages + params                      | pluggable      |
-| Embeddings      | `EmbeddingCache`        | `np.ndarray` vectors keyed by model + text                           | `np.tobytes()` |
-| Retrieval       | `RetrievalCache`        | Document lists keyed by query + retriever + top-k                    | pluggable      |
-| Context/Session | `ContextCache`          | Conversation turns keyed by session ID + turn index                  | pluggable      |
-| Semantic        | `SemanticCache`         | Answers reused for semantically similar queries (cosine ≥ threshold) | pluggable      |
-| Streaming       | `StreamingResponseCache`| Buffers streamed LLM chunks; replays from cache as generator         | pluggable      |
+| Layer             | Class                    | What it caches                                                       | Serialization  |
+| ----------------- | ------------------------ | -------------------------------------------------------------------- | -------------- |
+| LLM Response      | `ResponseCache`          | Model output keyed by model + messages + params                      | pluggable      |
+| Embeddings        | `EmbeddingCache`         | `np.ndarray` vectors keyed by model + text                           | `np.tobytes()` |
+| Retrieval         | `RetrievalCache`         | Document lists keyed by query + retriever + top-k                    | pluggable      |
+| Context/Session   | `ContextCache`           | Conversation turns keyed by session ID + turn index                  | pluggable      |
+| Semantic          | `SemanticCache`          | Answers reused for semantically similar queries (cosine ≥ threshold) | pluggable      |
+| Adaptive Semantic | `AdaptiveSemanticCache`  | SemanticCache + auto-tuning threshold + multi-turn guard             | pluggable      |
+| Streaming         | `StreamingResponseCache` | Buffers streamed LLM chunks; replays from cache as generator         | pluggable      |
+| Prompt Cache      | `PromptCacheLayer`       | Injects Anthropic `cache_control`; tracks provider cache savings     | —              |
 
 ### Storage Backends
 
-| Backend              | Class                 | Extras            | Best For                           |
-| -------------------- | --------------------- | ----------------- | ---------------------------------- |
-| In-Memory (LRU)      | `InMemoryBackend`     | — (core)          | Dev, testing, single-process       |
-| Async In-Memory      | `AsyncInMemoryBackend`| — (core)          | FastAPI, async frameworks          |
-| Disk                 | `DiskBackend`         | — (core)          | Persistent, single-machine         |
-| Redis                | `RedisBackend`        | `[redis]`         | Shared across processes / services |
-| Tiered (L1 + L2)     | `TieredBackend`       | — (core)          | Memory speed + Redis persistence   |
-| FAISS                | `FAISSBackend`        | `[vector-faiss]`  | High-speed vector similarity       |
-| ChromaDB             | `ChromaBackend`       | `[vector-chroma]` | Persistent vector store + metadata |
+| Backend              | Class                 | Extras              | Best For                             |
+| -------------------- | --------------------- | ------------------- | ------------------------------------ |
+| In-Memory (LRU)      | `InMemoryBackend`     | — (core)            | Dev, testing, single-process         |
+| Async In-Memory      | `AsyncInMemoryBackend`| — (core)            | FastAPI, async frameworks            |
+| Disk                 | `DiskBackend`         | — (core)            | Persistent, single-machine           |
+| Redis                | `RedisBackend`        | `[redis]`           | Shared across processes / services   |
+| Tiered (L1 + L2)     | `TieredBackend`       | — (core)            | Memory speed + Redis persistence     |
+| FAISS                | `FAISSBackend`        | `[vector-faiss]`    | High-speed in-process vector search  |
+| ChromaDB             | `ChromaBackend`       | `[vector-chroma]`   | Persistent vector store + metadata   |
+| Qdrant               | `QdrantBackend`       | `[vector-qdrant]`   | Fastest production vector DB (22ms)  |
+| Weaviate             | `WeaviateBackend`     | `[vector-weaviate]` | Native hybrid search (vector + BM25) |
 
 ### Framework Adapters
 
-| Framework             | Class                   | Hook Point                                           | Async                             |
-| --------------------- | ----------------------- | ---------------------------------------------------- | --------------------------------- |
-| OpenAI SDK            | `OpenAICacheAdapter`    | `client.chat.completions.create`                     | ✅`achat_create`                  |
-| Anthropic SDK         | `AnthropicCacheAdapter` | `client.messages.create`                             | ✅`amessages_create`              |
-| LangChain ≥ 0.2       | `LangChainCacheAdapter` | `BaseCache` — `lookup` / `update`                    | ✅`alookup` / `aupdate`           |
-| LangGraph ≥ 0.1 / 1.x | `LangGraphCacheAdapter` | `BaseCheckpointSaver` — `get_tuple` / `put` / `list` | ✅`aget_tuple` / `aput` / `alist` |
-| AutoGen ≥ 0.4         | `AutoGenCacheAdapter`   | `AssistantAgent.run()` / `arun()`                    | ✅`arun`                          |
-| AutoGen 0.2.x         | `AutoGenCacheAdapter`   | `ConversableAgent.generate_reply()`                  | —                                 |
-| CrewAI ≥ 0.28         | `CrewAICacheAdapter`    | `Crew.kickoff()`                                     | ✅`kickoff_async`                 |
-| Agno ≥ 0.1            | `AgnoCacheAdapter`      | `Agent.run()` / `arun()`                             | ✅`arun`                          |
-| A2A ≥ 0.2             | `A2ACacheAdapter`       | `process()` / `wrap()` decorator                     | ✅`aprocess`                      |
+| Framework             | Class                        | Hook Point                                           | Async                             |
+| --------------------- | ---------------------------- | ---------------------------------------------------- | --------------------------------- |
+| OpenAI SDK            | `OpenAICacheAdapter`         | `client.chat.completions.create`                     | ✅`achat_create`                  |
+| Anthropic SDK         | `AnthropicCacheAdapter`      | `client.messages.create`                             | ✅`amessages_create`              |
+| Google ADK            | `GoogleADKCacheAdapter`      | `Agent.run()` / `run_async()`                        | ✅`arun`                          |
+| OpenAI Agents SDK     | `OpenAIAgentsCacheAdapter`   | `Runner.run()` / `run_sync()`                        | ✅`arun`                          |
+| LlamaIndex LLM        | `LlamaIndexLLMCacheAdapter`  | `complete()` / `chat()` / async variants             | ✅`acomplete` / `achat`           |
+| LlamaIndex QueryEngine| `LlamaIndexQueryCacheAdapter`| `query()` / `aquery()`                               | ✅`aquery`                        |
+| Claude Agent SDK      | `ClaudeAgentCacheAdapter`    | `claude_code_sdk.query()` async generator            | ✅ (async generator)              |
+| LangChain ≥ 0.2       | `LangChainCacheAdapter`      | `BaseCache` — `lookup` / `update`                    | ✅`alookup` / `aupdate`           |
+| LangGraph ≥ 0.1 / 1.x | `LangGraphCacheAdapter`      | `BaseCheckpointSaver` — `get_tuple` / `put` / `list` | ✅`aget_tuple` / `aput` / `alist` |
+| AutoGen ≥ 0.4         | `AutoGenCacheAdapter`        | `AssistantAgent.run()` / `arun()`                    | ✅`arun`                          |
+| AutoGen 0.2.x         | `AutoGenCacheAdapter`        | `ConversableAgent.generate_reply()`                  | —                                 |
+| CrewAI ≥ 0.28         | `CrewAICacheAdapter`         | `Crew.kickoff()`                                     | ✅`kickoff_async`                 |
+| Agno ≥ 0.1            | `AgnoCacheAdapter`           | `Agent.run()` / `arun()`                             | ✅`arun`                          |
+| A2A ≥ 0.2             | `A2ACacheAdapter`            | `process()` / `wrap()` decorator                     | ✅`aprocess`                      |
 
 ### Middleware
 
@@ -102,18 +111,23 @@ Every AI agent pipeline makes the same expensive calls repeatedly:
 
 ### Core Engine
 
-| Component        | Class                | Description                                                              |
-| ---------------- | -------------------- | ------------------------------------------------------------------------ |
-| Orchestrator     | `CacheManager`       | Central hub — wires backend, key builder, TTL policy, invalidation       |
-| Key Builder      | `CacheKeyBuilder`    | `namespace:type:sha256[:16]` canonical keys                              |
-| Metrics          | `CacheMetrics`       | Thread-safe hit/miss/eviction counters + `hit_rate` property             |
-| Serializer       | `Serializer`         | Pluggable encode/decode — `PickleSerializer` (default), `JsonSerializer` |
-| Compressor       | `Compressor`         | Optional compression — `GzipCompressor`, `NoopCompressor` (default)     |
-| Stampede Shield  | `StampedeShield`     | Per-key `threading.Lock` prevents concurrent duplicate LLM calls         |
-| TTL Policy       | `TTLPolicy`          | Global + per-layer TTL overrides                                         |
-| Eviction         | `EvictionPolicy`     | LRU / TTL-only strategies, wired into `InMemoryBackend`                  |
-| Invalidation     | `InvalidationEngine` | Tag-based bulk eviction                                                  |
-| Settings         | `OmnicacheSettings`  | Dataclass + `from_env()` for 12-factor config                            |
+| Component        | Class                | Description                                                                    |
+| ---------------- | -------------------- | ------------------------------------------------------------------------------ |
+| Orchestrator     | `CacheManager`       | Central hub — wires backend, key builder, TTL policy, invalidation             |
+| Key Builder      | `CacheKeyBuilder`    | `namespace:type:sha256[:16]` canonical keys                                    |
+| Metrics          | `CacheMetrics`       | Hit/miss/eviction counters + provider cache hits + cost saved                  |
+| Serializer       | `Serializer`         | Pluggable encode/decode — `PickleSerializer` (default), `JsonSerializer`       |
+| Compressor       | `Compressor`         | Optional compression — `GzipCompressor`, `NoopCompressor` (default)           |
+| Stampede Shield  | `StampedeShield`     | Per-key `threading.Lock` prevents concurrent duplicate LLM calls               |
+| Request Config   | `RequestConfig`      | Per-request TTL / threshold / `skip_cache` overrides                           |
+| Cache Warmer     | `CacheWarmer`        | Bulk pre-populate from query lists or CSV files                                |
+| TTL Policy       | `TTLPolicy`          | Global + per-layer TTL overrides                                               |
+| Eviction         | `EvictionPolicy`     | LRU / TTL-only strategies, wired into `InMemoryBackend`                        |
+| Invalidation     | `InvalidationEngine` | Tag-based bulk eviction                                                        |
+| Multi-Tenant     | `CacheManager.for_tenant(id)` | Scoped manager with per-tenant key namespacing, shared backend       |
+| Settings         | `OmnicacheSettings`  | Dataclass + `from_env()` for 12-factor config                                  |
+| Prometheus       | `PrometheusExporter` | `/metrics` HTTP endpoint — requires `[observability]`                          |
+| OpenTelemetry    | `OpenTelemetryExporter` | Push metrics to OTEL collector — requires `[observability]`                 |
 
 ---
 
@@ -294,6 +308,12 @@ flowchart TD
 pip install omnicache-ai
 
 # ── Framework adapters ──────────────────────────────────────────────
+pip install 'omnicache-ai[openai]'          # OpenAI SDK adapter
+pip install 'omnicache-ai[anthropic]'       # Anthropic SDK adapter
+pip install 'omnicache-ai[google-adk]'      # Google ADK adapter
+pip install openai-agents                   # OpenAI Agents SDK adapter
+pip install 'omnicache-ai[llamaindex]'      # LlamaIndex LLM + QueryEngine adapters
+pip install claude-code-sdk                 # Claude Agent SDK adapter
 pip install 'omnicache-ai[langchain]'       # LangChain ≥ 0.2
 pip install 'omnicache-ai[langgraph]'       # LangGraph ≥ 0.1 / 1.x
 pip install 'omnicache-ai[autogen]'         # AutoGen legacy (pyautogen 0.2.x)
@@ -306,10 +326,15 @@ pip install 'a2a-sdk>=0.3' omnicache-ai     # A2A SDK ≥ 0.2
 pip install 'omnicache-ai[redis]'           # Redis
 pip install 'omnicache-ai[vector-faiss]'    # FAISS vector search
 pip install 'omnicache-ai[vector-chroma]'   # ChromaDB vector store
+pip install 'omnicache-ai[vector-qdrant]'   # Qdrant (22ms p95, fastest)
+pip install 'omnicache-ai[vector-weaviate]' # Weaviate hybrid search
+
+# ── Observability ────────────────────────────────────────────────────
+pip install 'omnicache-ai[observability]'   # Prometheus + OpenTelemetry exporters
 
 # ── Common combos ───────────────────────────────────────────────────
 pip install 'omnicache-ai[langchain,redis]'
-pip install 'omnicache-ai[langgraph,vector-faiss]'
+pip install 'omnicache-ai[langgraph,vector-qdrant]'
 
 # ── Everything ──────────────────────────────────────────────────────
 pip install 'omnicache-ai[all]'
@@ -588,6 +613,63 @@ cached = AgnoCacheAdapter(agent, manager)
 
 response = cached.run("Summarize the latest AI research")
 response = await cached.arun("Summarize the latest AI research")
+```
+
+### Google ADK
+
+```python
+from google.adk.agents import Agent
+from omnicache_ai.adapters.google_adk_adapter import GoogleADKCacheAdapter
+
+agent = Agent(name="research_agent", model="gemini-2.0-flash", instruction="...")
+cached = GoogleADKCacheAdapter(agent, manager)
+
+result = cached.run("Summarise the quarterly report")    # live call
+result = cached.run("Summarise the quarterly report")    # instant from cache
+result = await cached.arun("Async task")
+```
+
+### OpenAI Agents SDK
+
+```python
+from agents import Agent, Runner
+from omnicache_ai.adapters.openai_agents_adapter import OpenAIAgentsCacheAdapter
+
+agent = Agent(name="assistant", instructions="Be concise", model="gpt-4o")
+adapter = OpenAIAgentsCacheAdapter(manager)
+
+result = adapter.run(agent, "What is RAG?")
+result = await adapter.arun(agent, "What is RAG?")  # async
+```
+
+### LlamaIndex
+
+```python
+from llama_index.llms.openai import OpenAI
+from omnicache_ai.adapters.llamaindex_adapter import (
+    LlamaIndexLLMCacheAdapter,
+    LlamaIndexQueryCacheAdapter,
+)
+
+# LLM cache
+cached_llm = LlamaIndexLLMCacheAdapter(OpenAI(model="gpt-4o"), manager)
+response = cached_llm.complete("What is vector search?")
+
+# QueryEngine (RAG) cache
+engine = index.as_query_engine()
+cached_engine = LlamaIndexQueryCacheAdapter(engine, manager)
+response = cached_engine.query("What are the key findings?")
+```
+
+### Claude Agent SDK
+
+```python
+from omnicache_ai.adapters.claude_agent_adapter import ClaudeAgentCacheAdapter
+
+adapter = ClaudeAgentCacheAdapter(manager)
+
+async for msg in adapter.query("Fix the import error in utils.py", options=options):
+    print(msg)  # streams on first call, replays from cache on second
 ```
 
 ### OpenAI SDK
