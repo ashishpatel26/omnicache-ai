@@ -71,7 +71,7 @@ from omnicache_ai.middleware.llm_middleware import LLMMiddleware, AsyncLLMMiddle
 from omnicache_ai.middleware.embedding_middleware import EmbeddingMiddleware
 from omnicache_ai.middleware.retriever_middleware import RetrieverMiddleware
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     # Config
