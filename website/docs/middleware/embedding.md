@@ -210,4 +210,3 @@ sequenceDiagram
 :::warning
 `EmbeddingMiddleware` delegates cache reads and writes to the synchronous `EmbeddingCache.get()` and `EmbeddingCache.set()` methods, even when wrapping an async function. The async wrapper only awaits the embedding call itself.
 :::
-

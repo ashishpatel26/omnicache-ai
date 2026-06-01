@@ -253,4 +253,3 @@ sequenceDiagram
 :::warning
 `RetrieverMiddleware` delegates cache reads and writes to the synchronous `RetrievalCache.get()` and `RetrievalCache.set()` methods, even when wrapping an async function. The async wrapper only awaits the retriever call itself.
 :::
-

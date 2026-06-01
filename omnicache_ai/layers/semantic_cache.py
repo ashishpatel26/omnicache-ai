@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-import pickle
 from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 
+from omnicache_ai.core.serializer import DEFAULT_SERIALIZER
+
 if TYPE_CHECKING:
     from omnicache_ai.backends.base import CacheBackend, VectorBackend
     from omnicache_ai.core.key_builder import CacheKeyBuilder
+    from omnicache_ai.core.serializer import Serializer
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -46,6 +48,7 @@ class SemanticCache:
         embed_fn: Callable that converts a query string to a float32 numpy array.
         threshold: Minimum cosine similarity to accept a semantic match (default: 0.95).
         key_builder: Optional key builder; if None, a default is created.
+        serializer: Serializer for encoding/decoding values (default: pickle).
     """
 
     def __init__(
@@ -55,6 +58,7 @@ class SemanticCache:
         embed_fn: Callable[[str], np.ndarray],
         threshold: float = 0.95,
         key_builder: "CacheKeyBuilder | None" = None,
+        serializer: "Serializer | None" = None,
     ) -> None:
         from omnicache_ai.core.key_builder import CacheKeyBuilder
 
@@ -63,6 +67,7 @@ class SemanticCache:
         self._embed_fn = embed_fn
         self._threshold = threshold
         self._kb = key_builder or CacheKeyBuilder()
+        self._serializer = serializer or DEFAULT_SERIALIZER
 
     def get(self, query: str) -> Any | None:
         """Retrieve value using exact then semantic lookup."""
@@ -71,7 +76,7 @@ class SemanticCache:
         # 1. Exact hit
         raw = self._exact.get(key)
         if raw is not None:
-            return pickle.loads(raw)  # noqa: S301
+            return self._serializer.loads(raw)
 
         # 2. Semantic hit
         vector = self._embed_fn(query).astype(np.float32)
@@ -81,14 +86,14 @@ class SemanticCache:
             if score >= self._threshold:
                 stored_raw = self._exact.get(best_key)
                 if stored_raw is not None:
-                    return pickle.loads(stored_raw)  # noqa: S301
+                    return self._serializer.loads(stored_raw)
 
         return None
 
     def set(self, query: str, value: Any, ttl: int | None = None) -> None:
         """Store value with exact and vector indexing."""
         key = self._kb.build("response", query)
-        payload = pickle.dumps(value)
+        payload = self._serializer.dumps(value)
         self._exact.set(key, payload, ttl)
         vector = self._embed_fn(query).astype(np.float32)
         self._vector.add(key, vector, {"value": value})

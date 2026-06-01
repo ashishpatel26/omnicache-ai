@@ -6,6 +6,7 @@ Usage:
     uv run python cookbook/run_all.py --full   # include framework examples (needs Ollama)
     uv run python cookbook/run_all.py --all    # include optional-dep examples (redis, etc.)
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -24,32 +25,57 @@ class Example:
 
 EXAMPLES = [
     # ── Tier 1: no external deps (always run) ──────────────────────────────
-    Example("cookbook.core.agent",
-            "Core: ResponseCache + EmbeddingCache",  tier="base"),
-    Example("cookbook.ttl.agent",
-            "TTL: per-type retention policy",        tier="base"),
-    Example("cookbook.invalidation.agent",
-            "Invalidation: tag-based bulk eviction", tier="base"),
+    Example("cookbook.core.agent", "Core: ResponseCache + EmbeddingCache", tier="base"),
+    Example("cookbook.ttl.agent", "TTL: per-type retention policy", tier="base"),
+    Example("cookbook.invalidation.agent", "Invalidation: tag-based bulk eviction", tier="base"),
     # ── Tier 2: framework adapters (need Ollama + gemma3:4b) ───────────────
-    Example("cookbook.langchain.agent",    "LangChain: support assistant chain",
-            requires=["langchain_ollama"],  tier="framework"),
-    Example("cookbook.langgraph.agent",    "LangGraph: incident triage graph",
-            requires=["langgraph"],         tier="framework"),
-    Example("cookbook.autogen.agent",      "AutoGen: async assistant",
-            requires=["autogen_agentchat"], tier="framework"),
-    Example("cookbook.crewai.agent",       "CrewAI: release planning crew",
-            requires=["crewai", "litellm"], tier="framework"),
-    Example("cookbook.agno.agent",         "Agno: deployment risk analyst",
-            requires=["agno"],              tier="framework"),
-    Example("cookbook.a2a.agent",          "A2A: planner-executor-reviewer",
-            requires=["langchain_ollama"],  tier="framework"),
-    Example("cookbook.multi_framework.agent", "Multi-Framework: LangChain + A2A",
-            requires=["langchain_ollama"],  tier="framework"),
+    Example(
+        "cookbook.langchain.agent",
+        "LangChain: support assistant chain",
+        requires=["langchain_ollama"],
+        tier="framework",
+    ),
+    Example(
+        "cookbook.langgraph.agent",
+        "LangGraph: incident triage graph",
+        requires=["langgraph"],
+        tier="framework",
+    ),
+    Example(
+        "cookbook.autogen.agent",
+        "AutoGen: async assistant",
+        requires=["autogen_agentchat"],
+        tier="framework",
+    ),
+    Example(
+        "cookbook.crewai.agent",
+        "CrewAI: release planning crew",
+        requires=["crewai", "litellm"],
+        tier="framework",
+    ),
+    Example(
+        "cookbook.agno.agent", "Agno: deployment risk analyst", requires=["agno"], tier="framework"
+    ),
+    Example(
+        "cookbook.a2a.agent",
+        "A2A: planner-executor-reviewer",
+        requires=["langchain_ollama"],
+        tier="framework",
+    ),
+    Example(
+        "cookbook.multi_framework.agent",
+        "Multi-Framework: LangChain + A2A",
+        requires=["langchain_ollama"],
+        tier="framework",
+    ),
     # ── Tier 3: optional backends (need extra packages) ────────────────────
-    Example("cookbook.semantic_cache.agent", "Semantic Cache: FAISS + Ollama embed",
-            requires=["faiss", "langchain_ollama"], tier="optional"),
-    Example("cookbook.redis.agent",          "Redis: shared backend",
-            requires=["redis"],                     tier="optional"),
+    Example(
+        "cookbook.semantic_cache.agent",
+        "Semantic Cache: FAISS + Ollama embed",
+        requires=["faiss", "langchain_ollama"],
+        tier="optional",
+    ),
+    Example("cookbook.redis.agent", "Redis: shared backend", requires=["redis"], tier="optional"),
 ]
 
 
@@ -98,8 +124,7 @@ def main() -> None:
 
     selected = [e for e in EXAMPLES if e.tier in tiers]
 
-    print(
-        f"\nomnicache-ai cookbook -- running {len(selected)} examples\n{'-' * 60}")
+    print(f"\nomnicache-ai cookbook -- running {len(selected)} examples\n{'-' * 60}")
 
     passed = failed = skipped = 0
     for ex in selected:

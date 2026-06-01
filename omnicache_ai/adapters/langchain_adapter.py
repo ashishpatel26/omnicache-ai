@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import pickle
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from omnicache_ai.core.cache_manager import CacheManager
 
 try:
     from langchain_core.caches import BaseCache
-    from langchain_core.outputs import Generation  # noqa: F401
 
     _LANGCHAIN_AVAILABLE = True
 except ImportError:
@@ -47,14 +46,16 @@ class LangChainCacheAdapter(BaseCache):  # type: ignore[misc]
     def lookup(self, prompt: str, llm_string: str) -> list[Any] | None:
         key = self._make_key(prompt, llm_string)
         raw = self._manager.get(key)
-        return pickle.loads(raw) if raw is not None else None  # noqa: S301
+        if raw is None:
+            return None
+        return cast(list[Any], pickle.loads(raw))  # noqa: S301
 
     def update(self, prompt: str, llm_string: str, return_val: list[Any]) -> None:
         key = self._make_key(prompt, llm_string)
         self._manager.set(key, pickle.dumps(return_val), cache_type="response")
 
     def clear(self, **kwargs: Any) -> None:
-        pass  # Delegate to manager.clear() or tag invalidation as needed
+        self._manager.clear()
 
     async def alookup(self, prompt: str, llm_string: str) -> list[Any] | None:
         return self.lookup(prompt, llm_string)

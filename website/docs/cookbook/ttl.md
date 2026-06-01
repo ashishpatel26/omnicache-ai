@@ -100,4 +100,3 @@ manager = CacheManager(
 Without a TTL, the cache will grow indefinitely. Combine with `InMemoryBackend(max_size=...)`
 or periodic tag-based invalidation to keep memory usage in check.
 :::
-

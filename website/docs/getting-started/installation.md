@@ -150,4 +150,3 @@ For the new AutoGen API, install `autogen-agentchat>=0.4` separately:
 pip install 'autogen-agentchat>=0.4' omnicache-ai
 ```
 :::
-

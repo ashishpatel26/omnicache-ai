@@ -26,8 +26,8 @@ except ImportError:
 class FAISSBackend:
     """FAISS-based vector similarity backend.
 
-    Uses IndexFlatIP (inner product) which equals cosine similarity on
-    L2-normalised vectors. Metadata (key↔id mapping) is stored in Python dicts.
+    Uses IndexIDMap2 wrapping IndexFlatIP — supports both cosine similarity
+    (on L2-normalised vectors) and true in-place deletion via FAISS native IDs.
 
     Install with: pip install 'omnicache-ai[vector-faiss]'
 
@@ -44,7 +44,8 @@ class FAISSBackend:
             )
         self._dim = dim
         self._normalize = normalize
-        self._index = _faiss.IndexFlatIP(dim)
+        # IndexIDMap2 wraps a flat index and supports remove_ids()
+        self._index = _faiss.IndexIDMap2(_faiss.IndexFlatIP(dim))  # type: ignore[union-attr]
         self._id_to_key: dict[int, str] = {}
         self._key_to_id: dict[str, int] = {}
         self._id_to_value: dict[int, Any] = {}
@@ -64,7 +65,7 @@ class FAISSBackend:
         v = self._prep(vector)
         faiss_id = self._next_id
         self._next_id += 1
-        self._index.add(v)
+        self._index.add_with_ids(v, np.array([faiss_id], dtype=np.int64))
         self._id_to_key[faiss_id] = key
         self._key_to_id[key] = faiss_id
         self._id_to_value[faiss_id] = metadata.get("value")
@@ -89,10 +90,9 @@ class FAISSBackend:
         return self._id_to_value.get(faiss_id) if faiss_id is not None else None
 
     def delete(self, key: str) -> None:
-        # FAISS IndexFlat does not support in-place deletion.
-        # Mark as removed in our mapping; rebuild index periodically if needed.
         faiss_id = self._key_to_id.pop(key, None)
         if faiss_id is not None:
+            self._index.remove_ids(np.array([faiss_id], dtype=np.int64))
             self._id_to_key.pop(faiss_id, None)
             self._id_to_value.pop(faiss_id, None)
 

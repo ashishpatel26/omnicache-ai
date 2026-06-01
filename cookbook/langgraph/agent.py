@@ -94,8 +94,7 @@ class SafeLangGraphCacheAdapter(LangGraphCacheAdapter):
         index: list[str] = pickle.loads(index_raw) if index_raw else []  # noqa: S301
         if cid not in index:
             index.append(cid)
-        self._manager.set(self._thread_list_key(
-            thread_id), pickle.dumps(index))
+        self._manager.set(self._thread_list_key(thread_id), pickle.dumps(index))
 
         return {
             **config,

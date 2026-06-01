@@ -161,4 +161,3 @@ if __name__ == "__main__":
 In production, replace `InMemoryBackend()` for the `InvalidationEngine` tag store
 with a `RedisBackend` so that tag metadata is shared across workers.
 :::
-

@@ -40,15 +40,22 @@ from omnicache_ai.config.settings import OmnicacheSettings
 
 # Protocols
 from omnicache_ai.backends.base import CacheBackend, VectorBackend
+from omnicache_ai.backends.async_base import AsyncCacheBackend
 
 # Core backends (no optional deps)
 from omnicache_ai.backends.memory_backend import InMemoryBackend
 from omnicache_ai.backends.disk_backend import DiskBackend
+from omnicache_ai.backends.tiered_backend import TieredBackend
+from omnicache_ai.backends.async_memory_backend import AsyncInMemoryBackend
 
 # Core engine
+from omnicache_ai.core.compressor import Compressor, GzipCompressor, NoopCompressor
 from omnicache_ai.core.key_builder import CacheKeyBuilder
+from omnicache_ai.core.metrics import CacheMetrics
 from omnicache_ai.core.policies import TTLPolicy, EvictionPolicy
 from omnicache_ai.core.invalidation import InvalidationEngine
+from omnicache_ai.core.serializer import JsonSerializer, PickleSerializer, Serializer
+from omnicache_ai.core.stampede import StampedeShield
 from omnicache_ai.core.cache_manager import CacheManager
 
 # Cache layers
@@ -57,6 +64,7 @@ from omnicache_ai.layers.retrieval_cache import RetrievalCache
 from omnicache_ai.layers.context_cache import ContextCache
 from omnicache_ai.layers.response_cache import ResponseCache
 from omnicache_ai.layers.semantic_cache import SemanticCache
+from omnicache_ai.layers.streaming_cache import StreamingResponseCache
 
 # Middleware
 from omnicache_ai.middleware.llm_middleware import LLMMiddleware, AsyncLLMMiddleware
@@ -71,14 +79,25 @@ __all__ = [
     # Protocols
     "CacheBackend",
     "VectorBackend",
+    "AsyncCacheBackend",
     # Backends
     "InMemoryBackend",
     "DiskBackend",
+    "TieredBackend",
+    "AsyncInMemoryBackend",
     # Core
     "CacheKeyBuilder",
+    "CacheMetrics",
     "TTLPolicy",
     "EvictionPolicy",
     "InvalidationEngine",
+    "Compressor",
+    "GzipCompressor",
+    "NoopCompressor",
+    "Serializer",
+    "PickleSerializer",
+    "JsonSerializer",
+    "StampedeShield",
     "CacheManager",
     # Layers
     "EmbeddingCache",
@@ -86,6 +105,7 @@ __all__ = [
     "ContextCache",
     "ResponseCache",
     "SemanticCache",
+    "StreamingResponseCache",
     # Middleware
     "LLMMiddleware",
     "AsyncLLMMiddleware",

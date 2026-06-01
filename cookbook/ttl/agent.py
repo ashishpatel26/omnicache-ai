@@ -14,8 +14,7 @@ def main() -> None:
     manager = CacheManager(
         backend=InMemoryBackend(),
         key_builder=CacheKeyBuilder(namespace="cookbook-ttl"),
-        ttl_policy=TTLPolicy(default_ttl=60, per_type={
-                             "response": 10, "embed": 3600}),
+        ttl_policy=TTLPolicy(default_ttl=60, per_type={"response": 10, "embed": 3600}),
     )
     t0 = time.perf_counter()
     manager.set("demo", "ok", cache_type="response")

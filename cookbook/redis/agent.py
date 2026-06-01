@@ -13,8 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 def main() -> None:
     manager = CacheManager(
-        backend=RedisBackend(url="redis://localhost:6379/0",
-                             key_prefix="cookbook:"),
+        backend=RedisBackend(url="redis://localhost:6379/0", key_prefix="cookbook:"),
         key_builder=CacheKeyBuilder(namespace="cookbook-redis"),
     )
     t0 = time.perf_counter()

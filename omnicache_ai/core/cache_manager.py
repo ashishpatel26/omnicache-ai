@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from omnicache_ai.backends.base import CacheBackend, VectorBackend
+from omnicache_ai.core.compressor import DEFAULT_COMPRESSOR, Compressor
 from omnicache_ai.core.invalidation import InvalidationEngine
 from omnicache_ai.core.key_builder import CacheKeyBuilder
-from omnicache_ai.core.policies import TTLPolicy
+from omnicache_ai.core.metrics import CacheMetrics
+from omnicache_ai.core.policies import EvictionPolicy, TTLPolicy
 
 if TYPE_CHECKING:
     from omnicache_ai.config.settings import OmnicacheSettings
@@ -49,16 +51,21 @@ class CacheManager:
         backend: CacheBackend,
         key_builder: CacheKeyBuilder,
         ttl_policy: TTLPolicy | None = None,
+        eviction_policy: EvictionPolicy | None = None,
         vector_backend: VectorBackend | None = None,
         invalidation_engine: InvalidationEngine | None = None,
         semantic_threshold: float = 0.95,
+        compressor: Compressor | None = None,
     ) -> None:
         self._backend = backend
         self._key_builder = key_builder
         self._ttl_policy = ttl_policy or TTLPolicy()
+        self._eviction_policy = eviction_policy
         self._vector_backend = vector_backend
         self._invalidation = invalidation_engine
         self._threshold = semantic_threshold
+        self._compressor = compressor or DEFAULT_COMPRESSOR
+        self._metrics = CacheMetrics()
 
     # ------------------------------------------------------------------
     # Public API
@@ -86,9 +93,18 @@ class CacheManager:
             if results:
                 best_key, score = results[0]
                 if score >= self._threshold:
-                    return self._backend.get(best_key)
+                    value = self._backend.get(best_key)
+                    if value is not None:
+                        self._metrics.record_hit()
+                        return value
+            self._metrics.record_miss()
             return None
-        return self._backend.get(key)
+        value = self._backend.get(key)
+        if value is not None:
+            self._metrics.record_hit()
+            return self._compressor.decompress(value) if isinstance(value, bytes) else value
+        self._metrics.record_miss()
+        return None
 
     def set(
         self,
@@ -110,7 +126,9 @@ class CacheManager:
             cache_type: Used to resolve TTL from TTLPolicy when ttl is None.
         """
         effective_ttl = ttl if ttl is not None else self._ttl_policy.ttl_for(cache_type)
-        self._backend.set(key, value, effective_ttl)
+        stored = self._compressor.compress(value) if isinstance(value, bytes) else value
+        self._backend.set(key, stored, effective_ttl)
+        self._metrics.record_set()
         if vector is not None and self._vector_backend is not None:
             self._vector_backend.add(key, vector, {"value": value})
         if tags and self._invalidation is not None:
@@ -160,6 +178,11 @@ class CacheManager:
     def ttl_policy(self) -> TTLPolicy:
         return self._ttl_policy
 
+    @property
+    def metrics(self) -> CacheMetrics:
+        """Live hit/miss/eviction counters."""
+        return self._metrics
+
     # ------------------------------------------------------------------
     # Factory
     # ------------------------------------------------------------------
@@ -173,6 +196,12 @@ class CacheManager:
         from omnicache_ai.backends.memory_backend import InMemoryBackend
         from omnicache_ai.backends.disk_backend import DiskBackend
 
+        metrics = CacheMetrics()
+        eviction_policy = EvictionPolicy(
+            strategy=getattr(settings, "eviction_strategy", "lru"),
+            max_entries=settings.max_memory_entries,
+        )
+
         if settings.backend == "redis":
             from omnicache_ai.backends.redis_backend import RedisBackend
 
@@ -180,7 +209,11 @@ class CacheManager:
         elif settings.backend == "disk":
             backend = DiskBackend(directory=settings.disk_path)
         else:
-            backend = InMemoryBackend(max_size=settings.max_memory_entries)
+            backend = InMemoryBackend(
+                max_size=settings.max_memory_entries,
+                eviction_policy=eviction_policy,
+                on_evict=lambda _key: metrics.record_eviction(),
+            )
 
         vector_backend: VectorBackend | None = None
         if settings.vector_backend == "faiss":
@@ -201,11 +234,14 @@ class CacheManager:
         tag_store = InMemoryBackend()
         invalidation_engine = InvalidationEngine(tag_store=tag_store)
 
-        return cls(
+        manager = cls(
             backend=backend,
             key_builder=key_builder,
             ttl_policy=ttl_policy,
+            eviction_policy=eviction_policy,
             vector_backend=vector_backend,
             invalidation_engine=invalidation_engine,
             semantic_threshold=settings.semantic_threshold,
         )
+        manager._metrics = metrics
+        return manager

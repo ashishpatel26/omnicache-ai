@@ -123,4 +123,3 @@ print(cache.get("What are transformers?"))
 Replace the random embedding function with a real embedder (e.g., OpenAI, Sentence Transformers)
 for meaningful semantic matching.
 :::
-

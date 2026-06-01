@@ -1,7 +1,13 @@
 """Core caching layers quick demo."""
 
 from __future__ import annotations
-from omnicache_ai import CacheKeyBuilder, CacheManager, EmbeddingCache, InMemoryBackend, ResponseCache
+from omnicache_ai import (
+    CacheKeyBuilder,
+    CacheManager,
+    EmbeddingCache,
+    InMemoryBackend,
+    ResponseCache,
+)
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 import sys

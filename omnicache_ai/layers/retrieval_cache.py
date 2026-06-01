@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-import pickle
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, cast
+
+from omnicache_ai.core.serializer import DEFAULT_SERIALIZER
 
 if TYPE_CHECKING:
     from omnicache_ai.core.cache_manager import CacheManager
+    from omnicache_ai.core.serializer import Serializer
 
 
 class RetrievalCache:
@@ -18,10 +20,16 @@ class RetrievalCache:
 
     Args:
         manager: Underlying CacheManager instance.
+        serializer: Serializer for encoding/decoding values (default: pickle).
     """
 
-    def __init__(self, manager: "CacheManager") -> None:
+    def __init__(
+        self,
+        manager: "CacheManager",
+        serializer: "Serializer | None" = None,
+    ) -> None:
         self._manager = manager
+        self._serializer = serializer or DEFAULT_SERIALIZER
 
     def get(
         self,
@@ -34,7 +42,7 @@ class RetrievalCache:
             "retrieval", query, extra={"retriever": retriever_id, "top_k": top_k}
         )
         raw = self._manager.get(key)
-        return pickle.loads(raw) if raw is not None else None  # noqa: S301
+        return cast(list[Any], self._serializer.loads(raw)) if raw is not None else None
 
     def set(
         self,
@@ -51,7 +59,7 @@ class RetrievalCache:
         )
         self._manager.set(
             key,
-            pickle.dumps(documents),
+            self._serializer.dumps(documents),
             ttl=ttl,
             cache_type="retrieval",
             tags=tags,

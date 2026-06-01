@@ -104,4 +104,3 @@ print(manager.get("k3"))  # "v3"
 Combine multiple tags on each entry (e.g., `model:gpt-4o`, `deploy:v2.0`, `env:prod`)
 for fine-grained invalidation. Invalidating any one tag removes just the matching entries.
 :::
-

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-import pickle
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+
+from omnicache_ai.core.serializer import DEFAULT_SERIALIZER
 
 if TYPE_CHECKING:
     from omnicache_ai.core.cache_manager import CacheManager
+    from omnicache_ai.core.serializer import Serializer
 
 
 class ContextCache:
@@ -17,10 +19,16 @@ class ContextCache:
 
     Args:
         manager: Underlying CacheManager instance.
+        serializer: Serializer for encoding/decoding values (default: pickle).
     """
 
-    def __init__(self, manager: "CacheManager") -> None:
+    def __init__(
+        self,
+        manager: "CacheManager",
+        serializer: "Serializer | None" = None,
+    ) -> None:
         self._manager = manager
+        self._serializer = serializer or DEFAULT_SERIALIZER
 
     def get(self, session_id: str, turn_index: int | None = None) -> list[Any] | None:
         """Retrieve cached message history for a session."""
@@ -30,7 +38,7 @@ class ContextCache:
             extra={"turn": turn_index} if turn_index is not None else None,
         )
         raw = self._manager.get(key)
-        return pickle.loads(raw) if raw is not None else None  # noqa: S301
+        return cast(list[Any], self._serializer.loads(raw)) if raw is not None else None
 
     def set(
         self,
@@ -48,7 +56,7 @@ class ContextCache:
         )
         self._manager.set(
             key,
-            pickle.dumps(messages),
+            self._serializer.dumps(messages),
             ttl=ttl,
             cache_type="context",
             tags=tags or [f"session:{session_id}"],

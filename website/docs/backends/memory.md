@@ -145,4 +145,3 @@ Every public method acquires a `threading.RLock` before touching the
 internal `OrderedDict`. You can safely share a single `InMemoryBackend`
 instance across threads.
 :::
-
