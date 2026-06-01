@@ -87,8 +87,8 @@ LZ4 is ~4× faster than gzip with similar compression ratios for LLM text — go
 
 | Scenario | Recommendation |
 |---|---|
-| Short LLM responses (<1KB) | `NoopCompressor` — overhead exceeds savings |
-| Long LLM responses (>4KB) | `GzipCompressor(level=6)` |
+| Short LLM responses (&lt;1KB) | `NoopCompressor` — overhead exceeds savings |
+| Long LLM responses (&gt;4KB) | `GzipCompressor(level=6)` |
 | Redis backend (reduces network bytes) | `GzipCompressor` |
 | Disk backend (reduces storage) | `GzipCompressor` |
 | Latency-critical hot path | `NoopCompressor` or LZ4 |
