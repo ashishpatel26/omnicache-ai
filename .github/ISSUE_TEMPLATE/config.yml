@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / Discussion
+    url: https://github.com/ashishpatel26/omnicache-ai/discussions
+    about: Ask questions and discuss ideas in GitHub Discussions
+  - name: Documentation
+    url: https://github.com/ashishpatel26/omnicache-ai#readme
+    about: Read the docs before opening an issue
