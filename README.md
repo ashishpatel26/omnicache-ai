@@ -141,8 +141,14 @@ flowchart TD
 
     User -->|query| Adapters
 
-    subgraph Adapters["🔌 Framework Adapters"]
+    subgraph Adapters["🔌 Framework Adapters (13)"]
         direction LR
+        OAI["OpenAI SDK"]
+        ANT["Anthropic SDK"]
+        GADK["Google ADK"]
+        OAIA["OpenAI Agents SDK"]
+        LLI["LlamaIndex"]
+        CLA["Claude Agent SDK"]
         LC["LangChain"]
         LG["LangGraph"]
         AG["AutoGen"]
@@ -164,11 +170,14 @@ flowchart TD
 
     subgraph Layers["🗂️ Cache Layers (omnicache-ai)"]
         direction TB
-        RC["ResponseCache\n(LLM output)"]
+        ASC["AdaptiveSemanticCache\n(auto-tuning threshold)"]
+        SC["SemanticCache\n(cosine similarity)"]
+        RC["ResponseCache\n(LLM output, stampede-safe)"]
+        SRC["StreamingResponseCache\n(buffered stream replay)"]
         EC["EmbeddingCache\n(np.ndarray)"]
         REC["RetrievalCache\n(documents)"]
         CC["ContextCache\n(session turns)"]
-        SC["SemanticCache\n(similarity search)"]
+        PC["PromptCacheLayer\n(provider cache_control)"]
     end
 
     Layers -->|hit → return| User
@@ -176,21 +185,28 @@ flowchart TD
 
     subgraph Core["🧠 Core Engine"]
         direction LR
-        CM["CacheManager"]
+        CM["CacheManager\n+ for_tenant()"]
         KB["CacheKeyBuilder\nnamespace:type:sha256"]
+        MT["CacheMetrics\nhit_rate · cost_saved"]
         IE["InvalidationEngine\ntag-based eviction"]
         TP["TTLPolicy\nper-layer TTLs"]
+        SS["StampedeShield\nper-key lock"]
+        OBS["Observability\nPrometheus · OTEL"]
     end
 
     Core <-->|read / write| Backends
 
-    subgraph Backends["💾 Storage Backends"]
+    subgraph Backends["💾 Storage Backends (9)"]
         direction LR
-        MEM["InMemoryBackend\n(LRU, thread-safe)"]
+        MEM["InMemoryBackend\n(LRU)"]
+        AMEM["AsyncInMemoryBackend\n(asyncio)"]
+        TIER["TieredBackend\n(L1 + L2)"]
         DISK["DiskBackend\n(diskcache)"]
         REDIS["RedisBackend\n[redis]"]
         FAISS["FAISSBackend\n[vector-faiss]"]
         CHROMA["ChromaBackend\n[vector-chroma]"]
+        QDRANT["QdrantBackend\n[vector-qdrant]"]
+        WEAV["WeaviateBackend\n[vector-weaviate]"]
     end
 
     Core -->|miss| LLM_CALL
@@ -222,44 +238,58 @@ flowchart TD
 flowchart LR
     Q(["Query"])
 
-    Q --> S1
-    subgraph S1["① Semantic Layer"]
-        SC["SemanticCache\ncosine similarity ≥ 0.95\n→ skip everything below"]
+    Q --> S0
+    subgraph S0["① Adaptive Semantic Layer"]
+        ASC["AdaptiveSemanticCache\nauto-tuning threshold\n+ multi-turn guard"]
+    end
+
+    S0 -->|miss| S1
+    subgraph S1["② Semantic Layer"]
+        SC["SemanticCache\ncosine similarity ≥ threshold\n→ skip everything below"]
     end
 
     S1 -->|miss| S2
-    subgraph S2["② Response Layer"]
-        RC["ResponseCache\nexact model+msgs+params\nhash match"]
+    subgraph S2["③ Response Layer"]
+        RC["ResponseCache\nexact model+msgs+params\nhash match · stampede-safe"]
     end
 
-    S2 -->|miss| S3
-    subgraph S3["③ Retrieval Layer"]
+    S2 -->|miss| S2b
+    subgraph S2b["④ Streaming Layer"]
+        SRC["StreamingResponseCache\nbuffered stream replay\nfor streaming LLMs"]
+    end
+
+    S2b -->|miss| S3
+    subgraph S3["⑤ Retrieval Layer"]
         REC["RetrievalCache\nquery + retriever + top-k\nhash match"]
     end
 
     S3 -->|miss| S4
-    subgraph S4["④ Embedding Layer"]
+    subgraph S4["⑥ Embedding Layer"]
         EC["EmbeddingCache\nmodel + text hash match\nreturns np.ndarray"]
     end
 
     S4 -->|miss| S5
-    subgraph S5["⑤ Context Layer"]
+    subgraph S5["⑦ Context Layer"]
         CC["ContextCache\nsession_id + turn_index\nreturns message history"]
     end
 
-    S5 -->|all miss| LLM(["🤖 LLM / API Call"])
+    S5 -->|all miss| API["🤖 LLM / API Call\n+ PromptCacheLayer\n(provider cache_control)"]
 
-    LLM -->|result| Store["Store in all\nrelevant layers"]
+    API -->|result| Store["Store in all\nrelevant layers\n+ CacheMetrics update"]
     Store --> R(["Response"])
 
+    S0 -->|hit ⚡| R
     S1 -->|hit ⚡| R
     S2 -->|hit ⚡| R
+    S2b -->|hit ⚡| R
     S3 -->|hit ⚡| R
     S4 -->|hit ⚡| R
     S5 -->|hit ⚡| R
 
+    style S0 fill:#1a3a2a,color:#fff,stroke:#10b981
     style S1 fill:#4c1d95,color:#fff,stroke:#7c3aed
     style S2 fill:#1e3a5f,color:#fff,stroke:#3b82f6
+    style S2b fill:#1e2a4a,color:#fff,stroke:#60a5fa
     style S3 fill:#14532d,color:#fff,stroke:#22c55e
     style S4 fill:#713f12,color:#fff,stroke:#f59e0b
     style S5 fill:#7f1d1d,color:#fff,stroke:#ef4444
@@ -273,23 +303,36 @@ flowchart LR
 flowchart TD
     Start(["Which backend?"])
 
-    Start --> Q1{"Multiple\nprocesses\nor services?"}
-    Q1 -->|Yes| REDIS["RedisBackend\npip install 'omnicache-ai[redis]'"]
+    Start --> Q1{"Multiple processes\nor services?"}
+    Q1 -->|Yes| Q1b{"Also need\nfast local reads?"}
+    Q1b -->|Yes| TIERED["TieredBackend\nL1=InMemory + L2=Redis\n[core]"]
+    Q1b -->|No| REDIS["RedisBackend\n[redis]"]
+
     Q1 -->|No| Q2{"Need vector\nsimilarity?"}
 
-    Q2 -->|Yes| Q3{"Persist\nto disk?"}
-    Q3 -->|Yes| CHROMA["ChromaBackend\npip install 'omnicache-ai[vector-chroma]'"]
-    Q3 -->|No| FAISS["FAISSBackend\npip install 'omnicache-ai[vector-faiss]'"]
+    Q2 -->|Yes| Q3{"Need hybrid\nsearch (vector+BM25)?"}
+    Q3 -->|Yes| WEAV["WeaviateBackend\n[vector-weaviate]"]
+    Q3 -->|No| Q3b{"Production scale\n(10M+ vectors)?"}
+    Q3b -->|Yes| QDRANT["QdrantBackend\n22ms p95 · [vector-qdrant]"]
+    Q3b -->|No| Q3c{"Persist\nto disk?"}
+    Q3c -->|Yes| CHROMA["ChromaBackend\n[vector-chroma]"]
+    Q3c -->|No| FAISS["FAISSBackend\n[vector-faiss]"]
 
-    Q2 -->|No| Q4{"Survive\nrestarts?"}
-    Q4 -->|Yes| DISK["DiskBackend\n(no extra install)"]
-    Q4 -->|No| MEM["InMemoryBackend\n(no extra install)"]
+    Q2 -->|No| Q4{"Async framework\n(FastAPI / LangGraph)?"}
+    Q4 -->|Yes| AMEM["AsyncInMemoryBackend\n[core]"]
+    Q4 -->|No| Q5{"Survive\nrestarts?"}
+    Q5 -->|Yes| DISK["DiskBackend\n[core]"]
+    Q5 -->|No| MEM["InMemoryBackend\n[core]"]
 
     style REDIS fill:#dc2626,color:#fff
+    style TIERED fill:#b45309,color:#fff
     style FAISS fill:#2563eb,color:#fff
     style CHROMA fill:#7c3aed,color:#fff
+    style QDRANT fill:#0e7490,color:#fff
+    style WEAV fill:#0f766e,color:#fff
     style DISK fill:#d97706,color:#fff
     style MEM fill:#059669,color:#fff
+    style AMEM fill:#047857,color:#fff
 ```
 
 ---
