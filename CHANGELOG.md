@@ -5,6 +5,33 @@ All notable changes to **omnicache-ai** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-01
+
+### Added
+
+**New Adapters**
+- **GoogleADKCacheAdapter**: wraps `google.adk.agents.Agent.run()` / `run_async()` — requires `pip install 'omnicache-ai[google-adk]'`
+- **OpenAIAgentsCacheAdapter**: wraps OpenAI Agents SDK `Runner.run()` / `run_async()` — requires `openai-agents`
+- **LlamaIndexLLMCacheAdapter**: drop-in LlamaIndex LLM with `complete`/`chat`/async variants cached
+- **LlamaIndexQueryCacheAdapter**: caches `QueryEngine.query()` for RAG pipelines — requires `pip install 'omnicache-ai[llamaindex]'`
+- **ClaudeAgentCacheAdapter**: wraps `claude_code_sdk.query()` async generator — requires `claude-code-sdk`
+
+**New Vector Backends**
+- **QdrantBackend**: Qdrant vector store (22ms p95 at 10M vectors, fastest in 2026); in-memory + remote modes — requires `pip install 'omnicache-ai[vector-qdrant]'`
+- **WeaviateBackend**: Weaviate vector store with native hybrid search (semantic + BM25) — requires `pip install 'omnicache-ai[vector-weaviate]'`
+
+**New Cache Layers**
+- **PromptCacheLayer**: injects Anthropic `cache_control` breakpoints on long system prompts; tracks `provider_cache_hits`, `estimated_tokens_saved`, `estimated_cost_saved_usd` in `CacheMetrics`; also tracks OpenAI automatic prefix cache savings
+- **AdaptiveSemanticCache**: extends `SemanticCache` with auto-tuning threshold (target hit rate, adjustment interval, min/max bounds) and `max_turn_count` guard to skip semantic lookup on long multi-turn conversations
+
+**New Core Utilities**
+- **RequestConfig**: per-request override dataclass — `ttl`, `semantic_threshold`, `skip_cache`, `tags`, `namespace_prefix`
+- **CacheWarmer**: bulk-populate cache from query lists or CSV files (`warm_from_queries`, `warm_from_file`, `awarm_from_queries`)
+- **CacheManager.for_tenant(tenant_id)**: returns a scoped manager sharing the same backend with per-tenant key namespacing
+- **PrometheusExporter**: exposes `CacheMetrics` as Prometheus `/metrics` HTTP endpoint — requires `pip install 'omnicache-ai[observability]'`
+- **OpenTelemetryExporter**: pushes `CacheMetrics` to an OTEL collector — requires `pip install 'omnicache-ai[observability]'`
+- Extended `CacheMetrics` with `provider_cache_hits`, `estimated_tokens_saved`, `estimated_cost_saved_usd` fields
+
 ## [0.2.0] - 2026-06-01
 
 ### Added

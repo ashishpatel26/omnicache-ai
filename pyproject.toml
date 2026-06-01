@@ -1,6 +1,6 @@
 [project]
 name = "omnicache-ai"
-version = "0.2.0"
+version = "0.3.0"
 description = "Unified caching layer for AI/agent frameworks"
 requires-python = ">=3.12"
 license = "MIT"
@@ -45,7 +45,16 @@ autogen = ["autogen-agentchat>=0.4", "autogen-ext[openai]>=0.4"]
 crewai = ["crewai>=0.28", "litellm>=1.0"]
 agno = ["agno>=0.1"]
 a2a = ["a2a-sdk>=0.3"]
-all = ["omnicache-ai[redis,vector-faiss,vector-chroma,langchain,langgraph,autogen,crewai,agno,a2a]"]
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.25"]
+google-adk = ["google-adk>=0.1"]
+llamaindex = ["llama-index-core>=0.10"]
+vector-qdrant = ["qdrant-client>=1.7"]
+vector-weaviate = ["weaviate-client>=4.0"]
+observability = ["prometheus-client>=0.20", "opentelemetry-sdk>=1.20", "opentelemetry-exporter-otlp-proto-grpc>=1.20"]
+all = [
+    "omnicache-ai[redis,vector-faiss,vector-chroma,vector-qdrant,langchain,langgraph,autogen,crewai,agno,a2a,openai,anthropic,google-adk,llamaindex,observability]",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

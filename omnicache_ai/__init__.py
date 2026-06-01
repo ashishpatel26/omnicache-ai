@@ -19,9 +19,11 @@ From settings::
 
 Optional backends (require extras)::
 
-    from omnicache_ai.backends.redis_backend import RedisBackend     # [redis]
-    from omnicache_ai.backends.vector_backend import FAISSBackend    # [vector-faiss]
-    from omnicache_ai.backends.vector_backend import ChromaBackend   # [vector-chroma]
+    from omnicache_ai.backends.redis_backend import RedisBackend         # [redis]
+    from omnicache_ai.backends.vector_backend import FAISSBackend        # [vector-faiss]
+    from omnicache_ai.backends.vector_backend import ChromaBackend       # [vector-chroma]
+    from omnicache_ai.backends.vector_backend import QdrantBackend       # [vector-qdrant]
+    from omnicache_ai.backends.vector_backend import WeaviateBackend     # [vector-weaviate]
 
 Framework adapters (require framework extras)::
 
@@ -31,6 +33,12 @@ Framework adapters (require framework extras)::
     from omnicache_ai.adapters.crewai_adapter import CrewAICacheAdapter
     from omnicache_ai.adapters.agno_adapter import AgnoCacheAdapter
     from omnicache_ai.adapters.a2a_adapter import A2ACacheAdapter
+    from omnicache_ai.adapters.openai_adapter import OpenAICacheAdapter
+    from omnicache_ai.adapters.anthropic_adapter import AnthropicCacheAdapter
+    from omnicache_ai.adapters.google_adk_adapter import GoogleADKCacheAdapter
+    from omnicache_ai.adapters.openai_agents_adapter import OpenAIAgentsCacheAdapter
+    from omnicache_ai.adapters.llamaindex_adapter import LlamaIndexLLMCacheAdapter
+    from omnicache_ai.adapters.claude_agent_adapter import ClaudeAgentCacheAdapter
 """
 
 from __future__ import annotations
@@ -54,14 +62,18 @@ from omnicache_ai.core.key_builder import CacheKeyBuilder
 from omnicache_ai.core.metrics import CacheMetrics
 from omnicache_ai.core.policies import TTLPolicy, EvictionPolicy
 from omnicache_ai.core.invalidation import InvalidationEngine
+from omnicache_ai.core.request_config import RequestConfig
 from omnicache_ai.core.serializer import JsonSerializer, PickleSerializer, Serializer
 from omnicache_ai.core.stampede import StampedeShield
+from omnicache_ai.core.warmer import CacheWarmer
 from omnicache_ai.core.cache_manager import CacheManager
 
 # Cache layers
+from omnicache_ai.layers.adaptive_semantic_cache import AdaptiveSemanticCache
 from omnicache_ai.layers.embedding_cache import EmbeddingCache
 from omnicache_ai.layers.retrieval_cache import RetrievalCache
 from omnicache_ai.layers.context_cache import ContextCache
+from omnicache_ai.layers.prompt_cache import PromptCacheLayer
 from omnicache_ai.layers.response_cache import ResponseCache
 from omnicache_ai.layers.semantic_cache import SemanticCache
 from omnicache_ai.layers.streaming_cache import StreamingResponseCache
@@ -71,7 +83,7 @@ from omnicache_ai.middleware.llm_middleware import LLMMiddleware, AsyncLLMMiddle
 from omnicache_ai.middleware.embedding_middleware import EmbeddingMiddleware
 from omnicache_ai.middleware.retriever_middleware import RetrieverMiddleware
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     # Config
@@ -91,6 +103,7 @@ __all__ = [
     "TTLPolicy",
     "EvictionPolicy",
     "InvalidationEngine",
+    "RequestConfig",
     "Compressor",
     "GzipCompressor",
     "NoopCompressor",
@@ -98,11 +111,14 @@ __all__ = [
     "PickleSerializer",
     "JsonSerializer",
     "StampedeShield",
+    "CacheWarmer",
     "CacheManager",
     # Layers
+    "AdaptiveSemanticCache",
     "EmbeddingCache",
     "RetrievalCache",
     "ContextCache",
+    "PromptCacheLayer",
     "ResponseCache",
     "SemanticCache",
     "StreamingResponseCache",

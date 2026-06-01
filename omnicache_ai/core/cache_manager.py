@@ -178,6 +178,42 @@ class CacheManager:
     def ttl_policy(self) -> TTLPolicy:
         return self._ttl_policy
 
+    def for_tenant(self, tenant_id: str) -> "CacheManager":
+        """Return a scoped CacheManager that prefixes all keys with tenant_id.
+
+        All cache operations are isolated per tenant while sharing the same
+        backend pool, invalidation engine, and TTL policy.
+
+        Usage::
+
+            manager = CacheManager.from_settings(settings)
+            tenant_cache = manager.for_tenant("customer-42")
+            tenant_cache.set("key", value)
+            # stored as: omnicache:customer-42:resp:<hash>
+
+        Args:
+            tenant_id: Tenant identifier appended to the namespace.
+
+        Returns:
+            A new CacheManager scoped to this tenant.
+        """
+        scoped_kb = CacheKeyBuilder(
+            namespace=f"{self._key_builder._namespace}:{tenant_id}",
+            algo=self._key_builder._algo,
+        )
+        scoped = CacheManager(
+            backend=self._backend,
+            key_builder=scoped_kb,
+            ttl_policy=self._ttl_policy,
+            eviction_policy=self._eviction_policy,
+            vector_backend=self._vector_backend,
+            invalidation_engine=self._invalidation,
+            semantic_threshold=self._threshold,
+            compressor=self._compressor,
+        )
+        scoped._metrics = self._metrics
+        return scoped
+
     @property
     def metrics(self) -> CacheMetrics:
         """Live hit/miss/eviction counters."""

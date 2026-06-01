@@ -1,4 +1,4 @@
-"""Vector similarity backends: FAISSBackend and ChromaBackend (both optional)."""
+"""Vector similarity backends: FAISSBackend, ChromaBackend, QdrantBackend, WeaviateBackend (all optional)."""
 
 from __future__ import annotations
 
@@ -21,6 +21,30 @@ try:
 except ImportError:
     _chromadb = None  # type: ignore[assignment]
     _CHROMA_AVAILABLE = False
+
+try:
+    from qdrant_client import QdrantClient as _QdrantClient  # type: ignore[import-untyped]
+    from qdrant_client.models import (  # type: ignore[import-untyped]
+        Distance,
+        PointStruct,
+        VectorParams,
+    )
+
+    _QDRANT_AVAILABLE = True
+except ImportError:
+    _QdrantClient = None  # type: ignore[assignment]
+    Distance = None  # type: ignore[assignment]
+    PointStruct = None  # type: ignore[assignment]
+    VectorParams = None  # type: ignore[assignment]
+    _QDRANT_AVAILABLE = False
+
+try:
+    import weaviate as _weaviate  # type: ignore[import-untyped]
+
+    _WEAVIATE_AVAILABLE = True
+except ImportError:
+    _weaviate = None  # type: ignore[assignment]
+    _WEAVIATE_AVAILABLE = False
 
 
 class FAISSBackend:
@@ -168,3 +192,178 @@ class ChromaBackend:
 
     def close(self) -> None:
         pass
+
+
+class QdrantBackend:
+    """Qdrant-based vector similarity backend.
+
+    Fastest vector DB in 2026 (22ms p95 at 10M vectors). Supports both
+    in-memory mode (no server needed) and remote Qdrant Cloud / self-hosted.
+
+    Install with: pip install 'omnicache-ai[vector-qdrant]'
+
+    Args:
+        url: Qdrant URL or ``:memory:`` for in-process mode (default).
+        collection: Qdrant collection name.
+        api_key: Qdrant Cloud API key (optional for self-hosted).
+        dim: Embedding dimension.
+    """
+
+    def __init__(
+        self,
+        url: str = ":memory:",
+        collection: str = "omnicache",
+        api_key: str | None = None,
+        dim: int = 1536,
+    ) -> None:
+        if not _QDRANT_AVAILABLE:
+            raise ImportError(
+                "QdrantBackend requires 'qdrant-client'. "
+                "Install with: pip install 'omnicache-ai[vector-qdrant]'"
+            )
+        self._dim = dim
+        self._collection = collection
+        if url == ":memory:":
+            self._client = _QdrantClient(":memory:")  # type: ignore[union-attr]
+        else:
+            self._client = _QdrantClient(url=url, api_key=api_key)  # type: ignore[union-attr]
+        self._client.recreate_collection(
+            collection_name=collection,
+            vectors_config=VectorParams(size=dim, distance=Distance.COSINE),  # type: ignore[call-arg]
+        )
+        self._key_to_id: dict[str, int] = {}
+        self._next_id: int = 0
+
+    def add(self, key: str, vector: np.ndarray, metadata: dict[str, Any]) -> None:
+        if key in self._key_to_id:
+            self.delete(key)
+        point_id = self._next_id
+        self._next_id += 1
+        self._key_to_id[key] = point_id
+        self._client.upsert(
+            collection_name=self._collection,
+            points=[
+                PointStruct(  # type: ignore[call-arg]
+                    id=point_id,
+                    vector=vector.astype(np.float32).tolist(),
+                    payload={"key": key, **{k: str(v) for k, v in metadata.items()}},
+                )
+            ],
+        )
+
+    def search(self, vector: np.ndarray, top_k: int = 1) -> list[tuple[str, float]]:
+        results = self._client.search(
+            collection_name=self._collection,
+            query_vector=vector.astype(np.float32).tolist(),
+            limit=top_k,
+        )
+        return [(hit.payload["key"], float(hit.score)) for hit in results if "key" in hit.payload]
+
+    def delete(self, key: str) -> None:
+        point_id = self._key_to_id.pop(key, None)
+        if point_id is not None:
+            self._client.delete(
+                collection_name=self._collection,
+                points_selector=[point_id],
+            )
+
+    def clear(self) -> None:
+        self._client.recreate_collection(
+            collection_name=self._collection,
+            vectors_config=VectorParams(size=self._dim, distance=Distance.COSINE),  # type: ignore[call-arg]
+        )
+        self._key_to_id.clear()
+        self._next_id = 0
+
+    def close(self) -> None:
+        self.clear()
+
+
+class WeaviateBackend:
+    """Weaviate-based vector similarity backend.
+
+    Only vector DB with native hybrid search (semantic + BM25 keyword).
+    Supports both embedded (local) and cloud Weaviate instances.
+
+    Install with: pip install 'omnicache-ai[vector-weaviate]'
+
+    Args:
+        url: Weaviate instance URL. None = embedded local instance.
+        api_key: Weaviate Cloud API key (optional for self-hosted).
+        class_name: Weaviate class name for cache entries.
+    """
+
+    def __init__(
+        self,
+        url: str | None = None,
+        api_key: str | None = None,
+        class_name: str = "OmnicacheEntry",
+    ) -> None:
+        if not _WEAVIATE_AVAILABLE:
+            raise ImportError(
+                "WeaviateBackend requires 'weaviate-client'. "
+                "Install with: pip install 'omnicache-ai[vector-weaviate]'"
+            )
+        self._class_name = class_name
+        if url:
+            auth = _weaviate.auth.AuthApiKey(api_key) if api_key else None  # type: ignore[union-attr]
+            self._client = _weaviate.connect_to_weaviate_cloud(url, auth_credentials=auth)  # type: ignore[union-attr]
+        else:
+            self._client = _weaviate.connect_to_embedded()  # type: ignore[union-attr]
+
+        # Create class if not exists
+        if not self._client.collections.exists(class_name):
+            self._client.collections.create(
+                name=class_name,
+                properties=[
+                    _weaviate.classes.config.Property(
+                        name="cache_key", data_type=_weaviate.classes.config.DataType.TEXT
+                    ),  # type: ignore[union-attr]
+                ],
+            )
+        self._collection = self._client.collections.get(class_name)
+        self._key_to_uuid: dict[str, str] = {}
+
+    def add(self, key: str, vector: np.ndarray, metadata: dict[str, Any]) -> None:  # noqa: ARG002
+        if key in self._key_to_uuid:
+            self.delete(key)
+        uuid = self._collection.data.insert(
+            properties={"cache_key": key},
+            vector=vector.astype(np.float32).tolist(),
+        )
+        self._key_to_uuid[key] = str(uuid)
+
+    def search(self, vector: np.ndarray, top_k: int = 1) -> list[tuple[str, float]]:
+        results = self._collection.query.near_vector(
+            near_vector=vector.astype(np.float32).tolist(),
+            limit=top_k,
+            return_metadata=_weaviate.classes.query.MetadataQuery(certainty=True),  # type: ignore[union-attr]
+        )
+        out = []
+        for obj in results.objects:
+            cache_key = obj.properties.get("cache_key", "")
+            score = obj.metadata.certainty or 0.0
+            if cache_key:
+                out.append((cache_key, float(score)))
+        return out
+
+    def delete(self, key: str) -> None:
+        uuid = self._key_to_uuid.pop(key, None)
+        if uuid:
+            self._collection.data.delete_by_id(uuid)
+
+    def clear(self) -> None:
+        self._client.collections.delete(self._class_name)
+        self._client.collections.create(
+            name=self._class_name,
+            properties=[
+                _weaviate.classes.config.Property(
+                    name="cache_key", data_type=_weaviate.classes.config.DataType.TEXT
+                ),  # type: ignore[union-attr]
+            ],
+        )
+        self._collection = self._client.collections.get(self._class_name)
+        self._key_to_uuid.clear()
+
+    def close(self) -> None:
+        self._client.close()

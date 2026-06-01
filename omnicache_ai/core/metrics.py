@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import Lock
+from typing import Any
 
 
 @dataclass
@@ -15,12 +16,18 @@ class CacheMetrics:
         misses: Cache misses that required a downstream call.
         evictions: LRU evictions performed by InMemoryBackend.
         sets: Total cache writes.
+        provider_cache_hits: Server-side prompt cache hits (Anthropic/OpenAI).
+        estimated_tokens_saved: Tokens saved via provider-level prompt caching.
+        estimated_cost_saved_usd: Estimated USD saved via provider caching.
     """
 
     hits: int = field(default=0)
     misses: int = field(default=0)
     evictions: int = field(default=0)
     sets: int = field(default=0)
+    provider_cache_hits: int = field(default=0)
+    estimated_tokens_saved: int = field(default=0)
+    estimated_cost_saved_usd: float = field(default=0.0)
     _lock: Lock = field(default_factory=Lock, repr=False, compare=False)
 
     @property
@@ -55,8 +62,11 @@ class CacheMetrics:
             self.misses = 0
             self.evictions = 0
             self.sets = 0
+            self.provider_cache_hits = 0
+            self.estimated_tokens_saved = 0
+            self.estimated_cost_saved_usd = 0.0
 
-    def snapshot(self) -> dict[str, object]:
+    def snapshot(self) -> dict[str, Any]:
         """Return a plain-dict snapshot safe for logging/serialization."""
         with self._lock:
             return {
@@ -66,4 +76,7 @@ class CacheMetrics:
                 "sets": self.sets,
                 "hit_rate": round(self.hit_rate, 4),
                 "miss_rate": round(self.miss_rate, 4),
+                "provider_cache_hits": self.provider_cache_hits,
+                "estimated_tokens_saved": self.estimated_tokens_saved,
+                "estimated_cost_saved_usd": round(self.estimated_cost_saved_usd, 6),
             }
