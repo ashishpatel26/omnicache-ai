@@ -4,7 +4,7 @@ title: "API Reference"
 
 # API Reference
 
-Complete class and method reference for every module in omnicache-ai.
+Complete class and method reference for every public symbol in omnicache-ai v0.3.0.
 
 ---
 
@@ -12,26 +12,67 @@ Complete class and method reference for every module in omnicache-ai.
 
 ### `CacheManager`
 
-
-The central orchestrator that wires together backends, key builder, TTL policies, and invalidation.
+Central orchestrator. Wires backend, key builder, TTL policy, compressor, metrics, and optional vector backend.
 
 ```python
-from omnicache_ai import CacheManager, InMemoryBackend, CacheKeyBuilder
+from omnicache_ai import CacheManager
+```
+
+**Constructor:**
+
+```python
+CacheManager(
+    backend: CacheBackend,
+    key_builder: CacheKeyBuilder,
+    ttl_policy: TTLPolicy | None = None,
+    eviction_policy: EvictionPolicy | None = None,
+    vector_backend: VectorBackend | None = None,
+    invalidation_engine: InvalidationEngine | None = None,
+    semantic_threshold: float = 0.95,
+    compressor: Compressor | None = None,
+)
 ```
 
 | Method | Signature | Returns | Description |
 |---|---|---|---|
-| `__init__` | `(backend, key_builder, ttl_policy=None, vector_backend=None, invalidation_engine=None, semantic_threshold=0.95)` | — | Create a new manager |
-| `get` | `(key, semantic=False, vector=None)` | `Any \| None` | Retrieve cached value (exact or semantic) |
-| `set` | `(key, value, ttl=None, vector=None, tags=None, cache_type="response")` | `None` | Store a value |
-| `delete` | `(key)` | `None` | Remove a key |
-| `exists` | `(key)` | `bool` | Check if key exists |
-| `invalidate` | `(tag)` | `int` | Remove all keys with tag |
-| `clear` | `()` | `None` | Flush all entries |
+| `get` | `(key, semantic=False, vector=None)` | `Any \| None` | Exact or semantic lookup |
+| `set` | `(key, value, ttl=None, vector=None, tags=None, cache_type="response")` | `None` | Store value |
+| `delete` | `(key)` | `None` | Remove key |
+| `exists` | `(key)` | `bool` | Check key presence |
+| `invalidate` | `(tag)` | `int` | Bulk remove by tag |
+| `clear` | `()` | `None` | Flush all |
 | `close` | `()` | `None` | Release resources |
-| `from_settings` | `(settings)` | `CacheManager` | Factory from OmnicacheSettings |
+| `for_tenant` | `(tenant_id: str)` | `CacheManager` | Scoped manager with per-tenant key namespace |
+| `from_settings` | `(settings: OmnicacheSettings)` | `CacheManager` | Factory constructor |
 
-**Properties:** `key_builder`, `ttl_policy`
+**Properties:** `key_builder`, `ttl_policy`, `metrics`
+
+---
+
+### `CacheMetrics`
+
+Thread-safe counters. Accessed via `manager.metrics`.
+
+```python
+from omnicache_ai import CacheMetrics
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `hits` | `int` | Cache hits |
+| `misses` | `int` | Cache misses |
+| `evictions` | `int` | LRU evictions |
+| `sets` | `int` | Cache writes |
+| `provider_cache_hits` | `int` | Server-side prompt cache hits |
+| `estimated_tokens_saved` | `int` | Tokens saved via provider caching |
+| `estimated_cost_saved_usd` | `float` | Estimated USD saved |
+
+| Property / Method | Returns | Description |
+|---|---|---|
+| `hit_rate` | `float` | `hits / (hits + misses)` |
+| `miss_rate` | `float` | `1.0 - hit_rate` |
+| `snapshot()` | `dict[str, Any]` | JSON-serializable dict of all fields |
+| `reset()` | `None` | Zero all counters |
 
 ---
 
@@ -41,14 +82,79 @@ from omnicache_ai import CacheManager, InMemoryBackend, CacheKeyBuilder
 from omnicache_ai import CacheKeyBuilder
 ```
 
-| Method | Signature | Returns | Description |
+`__init__(namespace="omnicache", algo="sha256")`
+
+| Method | Signature | Returns |
+|---|---|---|
+| `build` | `(cache_type, content, extra=None)` | `str` |
+
+Key format: `{namespace}:{type_prefix}:{hash[:16]}`
+
+---
+
+### `Serializer` / `PickleSerializer` / `JsonSerializer`
+
+```python
+from omnicache_ai import Serializer, PickleSerializer, JsonSerializer
+```
+
+Protocol — implement `dumps(value) -> bytes` and `loads(data) -> Any`.
+
+---
+
+### `Compressor` / `GzipCompressor` / `NoopCompressor`
+
+```python
+from omnicache_ai import Compressor, GzipCompressor, NoopCompressor
+```
+
+Protocol — implement `compress(data: bytes) -> bytes` and `decompress(data: bytes) -> bytes`.
+
+`GzipCompressor(level: int = 6)` — level 0–9.
+
+---
+
+### `StampedeShield`
+
+```python
+from omnicache_ai import StampedeShield
+```
+
+`__init__(timeout: float = 30.0)`
+
+`shield.lock(key: str)` — context manager. Acquires per-key lock; releases on exit.
+
+---
+
+### `RequestConfig`
+
+```python
+from omnicache_ai import RequestConfig
+```
+
+| Field | Type | Default | Description |
 |---|---|---|---|
-| `__init__` | `(namespace="omnicache", algo="sha256")` | — | Create key builder |
-| `build` | `(cache_type, content, extra=None)` | `str` | Build a cache key |
+| `ttl` | `int \| None` | `None` | Per-request TTL override |
+| `semantic_threshold` | `float \| None` | `None` | Per-request threshold override |
+| `skip_cache` | `bool` | `False` | Bypass cache entirely |
+| `tags` | `list[str]` | `[]` | Extra invalidation tags |
+| `namespace_prefix` | `str \| None` | `None` | Extra key prefix |
 
-**Key format:** `{namespace}:{type_prefix}:{hash[:16]}`
+---
 
-**Type prefixes:** `embedding` -> `embed`, `retrieval` -> `retrieval`, `context` -> `ctx`, `response` -> `resp`
+### `CacheWarmer`
+
+```python
+from omnicache_ai import CacheWarmer
+```
+
+`__init__(cache: ResponseCache)`
+
+| Method | Returns | Description |
+|---|---|---|
+| `warm_from_queries(queries, generate_fn, model_id, ttl, skip_existing)` | `dict[str, str]` | Warm from list |
+| `warm_from_file(path, generate_fn, model_id, ttl, query_column, skip_existing)` | `dict[str, str]` | Warm from CSV |
+| `awarm_from_queries(...)` | `dict[str, str]` | Async variant |
 
 ---
 
@@ -58,15 +164,7 @@ from omnicache_ai import CacheKeyBuilder
 from omnicache_ai import TTLPolicy
 ```
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `default_ttl` | `int \| None` | `3600` | Fallback TTL in seconds |
-| `per_type` | `dict[str, int \| None]` | `{}` | Per-cache-type overrides |
-
-| Method | Signature | Returns |
-|---|---|---|
-| `ttl_for` | `(cache_type)` | `int \| None` |
-| `from_settings` | `(settings)` | `TTLPolicy` |
+`__init__(default_ttl=3600, per_type={})` · `ttl_for(cache_type) -> int | None` · `from_settings(settings)`
 
 ---
 
@@ -87,15 +185,10 @@ from omnicache_ai import EvictionPolicy
 ### `InvalidationEngine`
 
 ```python
-from omnicache_ai.core.invalidation import InvalidationEngine
+from omnicache_ai import InvalidationEngine
 ```
 
-| Method | Signature | Returns | Description |
-|---|---|---|---|
-| `__init__` | `(tag_store)` | — | Create with a backend for tag storage |
-| `register` | `(key, tags)` | `None` | Associate key with tags |
-| `invalidate_tag` | `(tag, backend)` | `int` | Remove all keys for a tag |
-| `invalidate_key` | `(key, backend)` | `None` | Remove a specific key |
+`__init__(tag_store: CacheBackend)` · `register(key, tags)` · `invalidate_tag(tag, backend) -> int` · `invalidate_key(key, backend)`
 
 ---
 
@@ -115,89 +208,71 @@ from omnicache_ai import OmnicacheSettings
 | `vector_backend` | `"faiss" \| "chroma" \| "none"` | `"none"` |
 | `embedding_dim` | `int` | `1536` |
 | `max_memory_entries` | `int` | `10000` |
-| `key_hash_algo` | `"sha256" \| "md5"` | `"sha256"` |
 | `namespace` | `str` | `"omnicache"` |
 | `ttl_embedding` | `int \| None` | `86400` |
 | `ttl_retrieval` | `int \| None` | `3600` |
 | `ttl_context` | `int \| None` | `1800` |
 | `ttl_response` | `int \| None` | `600` |
 
-| Method | Returns |
-|---|---|
-| `from_env()` | `OmnicacheSettings` |
+`from_env() -> OmnicacheSettings`
+
+---
+
+## Observability
+
+### `PrometheusExporter`
+
+```python
+from omnicache_ai.core.exporters import PrometheusExporter
+```
+
+`__init__(metrics, port=9090, namespace="omnicache")` · `start(sync_interval=5.0)` · `stop()`
+
+### `OpenTelemetryExporter`
+
+```python
+from omnicache_ai.core.exporters import OpenTelemetryExporter
+```
+
+`__init__(metrics, endpoint="http://localhost:4317", export_interval_ms=10_000)` · `start()`
 
 ---
 
 ## Backends
 
-### `CacheBackend` (Protocol)
+### Protocols
 
 ```python
-from omnicache_ai.backends.base import CacheBackend
+from omnicache_ai.backends.base import CacheBackend, VectorBackend
+from omnicache_ai.backends.async_base import AsyncCacheBackend
 ```
 
-| Method | Signature | Returns |
+**CacheBackend:** `get / set / delete / exists / clear / close` (sync)
+
+**AsyncCacheBackend:** same methods, all `async`
+
+**VectorBackend:** `add(key, vector, metadata) / search(vector, top_k=1) -> list[tuple[str, float]] / delete / clear / close`
+
+---
+
+### Key-Value Backends
+
+| Class | Import | Constructor |
 |---|---|---|
-| `get` | `(key: str)` | `Any \| None` |
-| `set` | `(key: str, value: Any, ttl: int \| None = None)` | `None` |
-| `delete` | `(key: str)` | `None` |
-| `exists` | `(key: str)` | `bool` |
-| `clear` | `()` | `None` |
-| `close` | `()` | `None` |
+| `InMemoryBackend` | `from omnicache_ai import InMemoryBackend` | `(max_size=10_000, eviction_policy=None, on_evict=None)` |
+| `AsyncInMemoryBackend` | `from omnicache_ai import AsyncInMemoryBackend` | `(max_size=10_000)` |
+| `TieredBackend` | `from omnicache_ai import TieredBackend` | `(l1, l2, l1_ttl=300)` |
+| `DiskBackend` | `from omnicache_ai import DiskBackend` | `(directory, size_limit=2**30)` |
+| `RedisBackend` | `from omnicache_ai.backends.redis_backend import RedisBackend` | `(url="redis://localhost:6379/0", key_prefix="")` |
 
-### `VectorBackend` (Protocol)
+### Vector Backends
 
-```python
-from omnicache_ai.backends.base import VectorBackend
-```
-
-| Method | Signature | Returns |
+| Class | Import | Constructor |
 |---|---|---|
-| `add` | `(key, vector, metadata)` | `None` |
-| `search` | `(vector, top_k=1)` | `list[tuple[str, float]]` |
-| `delete` | `(key)` | `None` |
-| `clear` | `()` | `None` |
-| `close` | `()` | `None` |
-
-### `InMemoryBackend`
-
-```python
-from omnicache_ai import InMemoryBackend
-```
-
-`__init__(max_size: int = 10_000)` — Thread-safe LRU cache with TTL support.
-
-### `DiskBackend`
-
-```python
-from omnicache_ai import DiskBackend
-```
-
-`__init__(directory: str, size_limit: int = 2**30)` — Persistent cache via diskcache.
-
-### `RedisBackend`
-
-```python
-from omnicache_ai.backends.redis_backend import RedisBackend
-```
-
-`__init__(url: str = "redis://localhost:6379/0", key_prefix: str = "")` — Requires `pip install 'omnicache-ai[redis]'`.
-
-### `FAISSBackend`
-
-```python
-from omnicache_ai.backends.vector_backend import FAISSBackend
-```
-
-`__init__(dim: int, normalize: bool = True)` — Requires `pip install 'omnicache-ai[vector-faiss]'`.
-
-### `ChromaBackend`
-
-```python
-from omnicache_ai.backends.vector_backend import ChromaBackend
-```
-
-`__init__(collection_name: str = "omnicache", persist_directory: str | None = None)` — Requires `pip install 'omnicache-ai[vector-chroma]'`.
+| `FAISSBackend` | `from omnicache_ai.backends.vector_backend import FAISSBackend` | `(dim, normalize=True)` |
+| `ChromaBackend` | `from omnicache_ai.backends.vector_backend import ChromaBackend` | `(collection_name="omnicache", persist_directory=None)` |
+| `QdrantBackend` | `from omnicache_ai.backends.vector_backend import QdrantBackend` | `(url=":memory:", collection="omnicache", api_key=None, dim=1536)` |
+| `WeaviateBackend` | `from omnicache_ai.backends.vector_backend import WeaviateBackend` | `(url=None, api_key=None, class_name="OmnicacheEntry")` |
 
 ---
 
@@ -206,154 +281,156 @@ from omnicache_ai.backends.vector_backend import ChromaBackend
 ### `ResponseCache`
 
 ```python
-from omnicache_ai.layers.response_cache import ResponseCache
+from omnicache_ai import ResponseCache
 ```
+
+`__init__(manager, serializer=None, stampede_shield=None)`
 
 | Method | Signature | Returns |
 |---|---|---|
-| `__init__` | `(manager)` | — |
 | `get` | `(messages, model_id="default", params=None)` | `Any \| None` |
-| `set` | `(messages, response, model_id="default", params=None, ttl=None, tags=None)` | `None` |
+| `set` | `(messages, response, model_id, params, ttl, tags)` | `None` |
 | `get_or_generate` | `(messages, generate_fn, model_id, params, ttl)` | `Any` |
 | `invalidate_model` | `(model_id)` | `int` |
+
+---
+
+### `StreamingResponseCache`
+
+```python
+from omnicache_ai import StreamingResponseCache
+```
+
+`__init__(manager, serializer=None, chunk_joiner=None)`
+
+| Method | Returns |
+|---|---|
+| `get_or_stream(messages, stream_fn, model_id, params, ttl, tags)` | `Generator` |
+| `aget_or_stream(messages, stream_fn, model_id, params, ttl, tags)` | `AsyncGenerator` |
+
+---
 
 ### `EmbeddingCache`
 
 ```python
-from omnicache_ai.layers.embedding_cache import EmbeddingCache
+from omnicache_ai import EmbeddingCache
 ```
 
-| Method | Signature | Returns |
-|---|---|---|
-| `__init__` | `(manager, dim=1536)` | — |
-| `get` | `(text, model_id="default")` | `np.ndarray \| None` |
-| `set` | `(text, vector, model_id="default", ttl=None)` | `None` |
-| `get_or_compute` | `(text, compute_fn, model_id, ttl)` | `np.ndarray` |
+`__init__(manager, dim=1536)`
+
+`get(text, model_id) -> np.ndarray | None` · `set(text, vector, model_id, ttl)` · `get_or_compute(text, compute_fn, model_id, ttl) -> np.ndarray`
+
+---
 
 ### `RetrievalCache`
 
 ```python
-from omnicache_ai.layers.retrieval_cache import RetrievalCache
+from omnicache_ai import RetrievalCache
 ```
 
-| Method | Signature | Returns |
-|---|---|---|
-| `__init__` | `(manager)` | — |
-| `get` | `(query, retriever_id="default", top_k=5)` | `list \| None` |
-| `set` | `(query, documents, retriever_id="default", top_k=5, ttl=None, tags=None)` | `None` |
-| `get_or_retrieve` | `(query, retrieve_fn, retriever_id, top_k, ttl)` | `list` |
+`__init__(manager, serializer=None)`
+
+`get(query, retriever_id, top_k) -> list | None` · `set(query, documents, retriever_id, top_k, ttl, tags)` · `get_or_retrieve(query, retrieve_fn, retriever_id, top_k, ttl) -> list`
+
+---
 
 ### `ContextCache`
 
 ```python
-from omnicache_ai.layers.context_cache import ContextCache
+from omnicache_ai import ContextCache
 ```
 
-| Method | Signature | Returns |
-|---|---|---|
-| `__init__` | `(manager)` | — |
-| `get` | `(session_id, turn_index=None)` | `list \| None` |
-| `set` | `(session_id, messages, turn_index=None, ttl=None, tags=None)` | `None` |
-| `invalidate_session` | `(session_id)` | `int` |
+`__init__(manager, serializer=None)`
+
+`get(session_id, turn_index=None) -> list | None` · `set(session_id, messages, turn_index, ttl, tags)` · `invalidate_session(session_id) -> int`
+
+---
 
 ### `SemanticCache`
 
 ```python
-from omnicache_ai.layers.semantic_cache import SemanticCache
+from omnicache_ai import SemanticCache
 ```
 
-| Method | Signature | Returns |
-|---|---|---|
-| `__init__` | `(exact_backend, vector_backend, embed_fn, threshold=0.95, key_builder=None)` | — |
-| `get` | `(query)` | `Any \| None` |
-| `set` | `(query, value, ttl=None)` | `None` |
-| `delete` | `(query)` | `None` |
-| `clear` | `()` | `None` |
+`__init__(exact_backend, vector_backend, embed_fn, threshold=0.95, key_builder=None, serializer=None)`
+
+`get(query) -> Any | None` · `set(query, value, ttl)` · `delete(query)` · `clear()`
+
+---
+
+### `AdaptiveSemanticCache`
+
+```python
+from omnicache_ai import AdaptiveSemanticCache
+```
+
+Extends `SemanticCache`.
+
+`__init__(..., target_hit_rate=0.35, adjustment_interval=100, threshold_min=0.70, threshold_max=0.99, adjustment_step=0.02, max_turn_count=10)`
+
+`get(query, turn_count=0) -> Any | None` · `current_threshold: float` (property)
+
+---
+
+### `PromptCacheLayer`
+
+```python
+from omnicache_ai import PromptCacheLayer
+```
+
+`__init__(metrics=None, min_chars_to_cache=1024)`
+
+| Method | Description |
+|---|---|
+| `anthropic_create(client, **kwargs)` | Sync Anthropic `messages.create` + cache_control injection |
+| `anthropic_acreate(client, **kwargs)` | Async variant |
+| `openai_create(client, **kwargs)` | Sync OpenAI `chat.completions.create` + savings tracking |
+| `openai_acreate(client, **kwargs)` | Async variant |
 
 ---
 
 ## Middleware
 
-### `LLMMiddleware`
+### `LLMMiddleware` / `AsyncLLMMiddleware`
 
 ```python
-from omnicache_ai.middleware.llm_middleware import LLMMiddleware
+from omnicache_ai import LLMMiddleware, AsyncLLMMiddleware
 ```
 
-`__init__(response_cache, key_builder, model_id="default")` — Wraps sync LLM callables. Use as `@middleware` decorator.
-
-### `AsyncLLMMiddleware`
-
-```python
-from omnicache_ai.middleware.llm_middleware import AsyncLLMMiddleware
-```
-
-`__init__(response_cache, key_builder, model_id="default")` — Auto-detects sync/async callables.
+`__init__(response_cache, key_builder, model_id="default")` — Use as `@middleware` decorator or `middleware(fn)`.
 
 ### `EmbeddingMiddleware`
 
 ```python
-from omnicache_ai.middleware.embedding_middleware import EmbeddingMiddleware
+from omnicache_ai import EmbeddingMiddleware
 ```
 
-`__init__(embedding_cache, model_id="default")` — Wraps sync/async embedding functions.
+`__init__(embedding_cache, model_id="default")` — Wraps sync/async embed functions.
 
 ### `RetrieverMiddleware`
 
 ```python
-from omnicache_ai.middleware.retriever_middleware import RetrieverMiddleware
+from omnicache_ai import RetrieverMiddleware
 ```
 
-`__init__(retrieval_cache, retriever_id="default", default_top_k=5)` — Wraps sync/async retriever functions.
+`__init__(retrieval_cache, retriever_id="default", default_top_k=5)` — Wraps sync/async retrievers.
 
 ---
 
 ## Adapters
 
-### `LangChainCacheAdapter`
-
-```python
-from omnicache_ai.adapters.langchain_adapter import LangChainCacheAdapter
-```
-
-`__init__(manager)` — Implements `langchain_core.caches.BaseCache`. Methods: `lookup`, `update`, `alookup`, `aupdate`, `clear`.
-
-### `LangGraphCacheAdapter`
-
-```python
-from omnicache_ai.adapters.langgraph_adapter import LangGraphCacheAdapter
-```
-
-`__init__(cache_manager)` — Implements `BaseCheckpointSaver` for both langgraph 0.x and 1.x. Methods: `get`, `get_tuple`, `put`, `put_writes`, `list`, `aget_tuple`, `aput`, `aput_writes`, `alist`, `get_next_version`.
-
-### `AutoGenCacheAdapter`
-
-```python
-from omnicache_ai.adapters.autogen_adapter import AutoGenCacheAdapter
-```
-
-`__init__(agent, cache_manager)` — Supports both `autogen-agentchat 0.4+` and `pyautogen 0.2.x`. Methods: `generate_reply`, `run`, `arun`.
-
-### `CrewAICacheAdapter`
-
-```python
-from omnicache_ai.adapters.crewai_adapter import CrewAICacheAdapter
-```
-
-`__init__(crew, cache_manager)` — Wraps `Crew.kickoff()`. Methods: `kickoff`, `kickoff_async`.
-
-### `AgnoCacheAdapter`
-
-```python
-from omnicache_ai.adapters.agno_adapter import AgnoCacheAdapter
-```
-
-`__init__(agent, cache_manager)` — Wraps Agno `Agent.run()`. Methods: `run`, `arun`.
-
-### `A2ACacheAdapter`
-
-```python
-from omnicache_ai.adapters.a2a_adapter import A2ACacheAdapter
-```
-
-`__init__(cache_manager, agent_id="default")` — Caches A2A task results. Methods: `process`, `aprocess`, `wrap`.
+| Adapter | Import | Constructor | Key Methods |
+|---|---|---|---|
+| `OpenAICacheAdapter` | `omnicache_ai.adapters.openai_adapter` | `(client, manager)` | `chat_create(**kw)`, `achat_create(**kw)`, `invalidate_model(model)` |
+| `AnthropicCacheAdapter` | `omnicache_ai.adapters.anthropic_adapter` | `(client, manager)` | `messages_create(**kw)`, `amessages_create(**kw)`, `invalidate_model(model)` |
+| `GoogleADKCacheAdapter` | `omnicache_ai.adapters.google_adk_adapter` | `(agent, manager)` | `run(task, **kw)`, `arun(task, **kw)`, `invalidate_agent()` |
+| `OpenAIAgentsCacheAdapter` | `omnicache_ai.adapters.openai_agents_adapter` | `(manager)` | `run(agent, input, **kw)`, `arun(agent, input, **kw)`, `invalidate_agent(agent)` |
+| `LlamaIndexLLMCacheAdapter` | `omnicache_ai.adapters.llamaindex_adapter` | `(llm, manager)` | `complete`, `acomplete`, `chat`, `achat`, `stream_complete`, `stream_chat` |
+| `LlamaIndexQueryCacheAdapter` | `omnicache_ai.adapters.llamaindex_adapter` | `(query_engine, manager)` | `query(q, **kw)`, `aquery(q, **kw)` |
+| `ClaudeAgentCacheAdapter` | `omnicache_ai.adapters.claude_agent_adapter` | `(manager)` | `query(prompt, options, **kw)` (async gen), `invalidate_all()` |
+| `LangChainCacheAdapter` | `omnicache_ai.adapters.langchain_adapter` | `(manager)` | `lookup`, `update`, `alookup`, `aupdate`, `clear` |
+| `LangGraphCacheAdapter` | `omnicache_ai.adapters.langgraph_adapter` | `(manager)` | `get_tuple`, `put`, `put_writes`, `list`, async variants |
+| `AutoGenCacheAdapter` | `omnicache_ai.adapters.autogen_adapter` | `(agent, manager)` | `generate_reply`, `run`, `arun` |
+| `CrewAICacheAdapter` | `omnicache_ai.adapters.crewai_adapter` | `(crew, manager)` | `kickoff`, `kickoff_async` |
+| `AgnoCacheAdapter` | `omnicache_ai.adapters.agno_adapter` | `(agent, manager)` | `run`, `arun` |
+| `A2ACacheAdapter` | `omnicache_ai.adapters.a2a_adapter` | `(manager, agent_id="default")` | `process`, `aprocess`, `wrap` |
