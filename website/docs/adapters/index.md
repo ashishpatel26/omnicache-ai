@@ -33,8 +33,8 @@ flowchart LR
 
 | Adapter | Framework | Min Version | Extra | Interface |
 |---|---|---|---|---|
-| [`OpenAICacheAdapter`](../adapters/openai-sdk.md) | OpenAI SDK | `openai >= 1.0` | `pip install 'omnicache-ai[openai]'` | `client.chat.completions.create` wrapper |
-| [`AnthropicCacheAdapter`](../adapters/anthropic-sdk.md) | Anthropic SDK | `anthropic >= 0.25` | `pip install 'omnicache-ai[anthropic]'` | `client.messages.create` wrapper |
+| [`OpenAICacheAdapter`](openai-sdk.md) | OpenAI SDK | `openai >= 1.0` | `pip install 'omnicache-ai[openai]'` | `client.chat.completions.create` wrapper |
+| [`AnthropicCacheAdapter`](anthropic-sdk.md) | Anthropic SDK | `anthropic >= 0.25` | `pip install 'omnicache-ai[anthropic]'` | `client.messages.create` wrapper |
 | [`GoogleADKCacheAdapter`](google-adk.md) | Google ADK | `google-adk >= 0.1` | `pip install 'omnicache-ai[google-adk]'` | Agent wrapper |
 | [`OpenAIAgentsCacheAdapter`](openai-agents.md) | OpenAI Agents SDK | `openai-agents` | `pip install openai-agents` | Runner wrapper |
 | [`LlamaIndexLLMCacheAdapter`](llamaindex.md) | LlamaIndex | `llama-index-core >= 0.10` | `pip install 'omnicache-ai[llamaindex]'` | LLM drop-in |
@@ -75,8 +75,8 @@ adapter = LangChainCacheAdapter(manager)
 
 | If you use... | Use this adapter |
 |---|---|
-| OpenAI SDK directly | [`OpenAICacheAdapter`](../adapters/openai-sdk.md) |
-| Anthropic SDK directly | [`AnthropicCacheAdapter`](../adapters/anthropic-sdk.md) |
+| OpenAI SDK directly | [`OpenAICacheAdapter`](openai-sdk.md) |
+| Anthropic SDK directly | [`AnthropicCacheAdapter`](anthropic-sdk.md) |
 | Google ADK agents | [`GoogleADKCacheAdapter`](google-adk.md) |
 | OpenAI Agents SDK | [`OpenAIAgentsCacheAdapter`](openai-agents.md) |
 | LlamaIndex LLMs | [`LlamaIndexLLMCacheAdapter`](llamaindex.md) |

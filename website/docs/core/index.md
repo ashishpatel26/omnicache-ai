@@ -4,19 +4,27 @@ title: "Core Module"
 
 # Core Module
 
-The core module is the foundation of OmniCache-AI. It contains the central orchestrator, key generation logic, TTL and eviction policies, tag-based invalidation, and the unified settings object that ties everything together.
+The core module is the foundation of OmniCache-AI — the central orchestrator, key generation, policies, invalidation, metrics, serialization, compression, stampede protection, cache warming, and multi-tenant namespacing.
 
 ---
 
-## Overview
+## Components
 
-Every caching operation in OmniCache-AI flows through the core module. Whether you are caching LLM responses, embeddings, retrieval results, or agent context, the core module provides the primitives that make it work:
-
-- **CacheManager** -- the single entry point for all cache reads, writes, and invalidations.
-- **CacheKeyBuilder** -- deterministic, namespaced key generation with content hashing.
-- **TTLPolicy / EvictionPolicy** -- fine-grained control over expiration and eviction.
-- **InvalidationEngine** -- tag-based bulk invalidation of related cache entries.
-- **OmnicacheSettings** -- a dataclass that centralizes every configuration knob, loadable from code or environment variables.
+| Component | Module | Description |
+|---|---|---|
+| [CacheManager](cache-manager.md) | `omnicache_ai.core.cache_manager` | Central orchestrator — `get`, `set`, `invalidate`, `for_tenant()` |
+| [CacheKeyBuilder](key-builder.md) | `omnicache_ai.core.key_builder` | `namespace:type:sha256[:16]` canonical keys |
+| [CacheMetrics](metrics.md) | `omnicache_ai.core.metrics` | Hit/miss/eviction counters + provider cache savings |
+| [Serializer](serializer.md) | `omnicache_ai.core.serializer` | Pluggable encode/decode — `PickleSerializer`, `JsonSerializer` |
+| [Compressor](../getting-started/configuration.md) | `omnicache_ai.core.compressor` | Optional compression — `GzipCompressor`, `NoopCompressor` |
+| [StampedeShield](stampede.md) | `omnicache_ai.core.stampede` | Per-key lock — prevents concurrent duplicate LLM calls |
+| [RequestConfig](request-config.md) | `omnicache_ai.core.request_config` | Per-request TTL / threshold / `skip_cache` overrides |
+| [CacheWarmer](warmer.md) | `omnicache_ai.core.warmer` | Bulk warm from query lists or CSV |
+| [TTLPolicy](policies.md#ttlpolicy) | `omnicache_ai.core.policies` | Global + per-layer TTL configuration |
+| [EvictionPolicy](policies.md#evictionpolicy) | `omnicache_ai.core.policies` | LRU / TTL-only strategy |
+| [InvalidationEngine](invalidation.md) | `omnicache_ai.core.invalidation` | Tag-based bulk eviction |
+| [Observability](observability.md) | `omnicache_ai.core.exporters` | Prometheus + OpenTelemetry exporters |
+| [OmnicacheSettings](settings.md) | `omnicache_ai.config.settings` | Unified config dataclass + `from_env()` |
 
 ---
 
@@ -29,51 +37,44 @@ graph TD
     A --> D[InvalidationEngine]
     A --> E[CacheBackend]
     A --> F[VectorBackend]
+    A --> M[CacheMetrics]
+    A --> CP[Compressor]
+    A --> SS[StampedeShield\n via ResponseCache]
     G[OmnicacheSettings] --> A
     G --> B
     G --> C
 ```
-
-The `CacheManager` wires together a backend, key builder, TTL policy, and optional vector backend. The `OmnicacheSettings` dataclass feeds configuration into the factory method `CacheManager.from_settings()`, which selects and instantiates the correct components automatically.
-
----
-
-## Components
-
-| Component | Module | Description |
-|---|---|---|
-| [CacheManager](cache-manager.md) | `omnicache_ai.core.cache_manager` | Central orchestrator for all cache operations |
-| [CacheKeyBuilder](key-builder.md) | `omnicache_ai.core.key_builder` | Deterministic namespaced key generation |
-| [TTLPolicy](policies.md#ttlpolicy) | `omnicache_ai.core.policies` | Per-type TTL configuration |
-| [EvictionPolicy](policies.md#evictionpolicy) | `omnicache_ai.core.policies` | Eviction strategy configuration |
-| [InvalidationEngine](invalidation.md) | `omnicache_ai.core.invalidation` | Tag-based cache invalidation |
-| [OmnicacheSettings](settings.md) | `omnicache_ai.config.settings` | Unified configuration dataclass |
 
 ---
 
 ## Quick Example
 
 ```python
-from omnicache_ai import CacheManager, OmnicacheSettings
+from omnicache_ai import CacheManager, OmnicacheSettings, CacheMetrics
 
-# One-line setup from environment variables
 manager = CacheManager.from_settings(OmnicacheSettings.from_env())
 
-# Build a key and cache a value
-key = manager.key_builder.build("response", {"prompt": "Hello, world!"})
-manager.set(key, "Hi there!", tags=["greetings"])
-
-# Retrieve
+key = manager.key_builder.build("response", "my prompt")
+manager.set(key, b"cached-result", tags=["model:gpt-4o"])
 value = manager.get(key)
 
-# Invalidate all entries tagged "greetings"
-removed = manager.invalidate("greetings")
+# Per-tenant scope
+tenant = manager.for_tenant("customer-42")
+
+# Metrics
+snap = manager.metrics.snapshot()
+print(f"Hit rate: {snap['hit_rate']:.0%}")
+
+# Tag invalidation
+manager.invalidate("model:gpt-4o")
 ```
 
 ---
 
 ## Next Steps
 
-- [CacheManager](cache-manager.md) -- Start here to understand the central API
-- [Configuration](../getting-started/configuration.md) -- All settings and environment variables
-- [Quick Start](../getting-started/quickstart.md) -- End-to-end walkthrough
+- [CacheManager](cache-manager.md) — central API
+- [CacheMetrics](metrics.md) — hit rate and cost tracking
+- [StampedeShield](stampede.md) — concurrency safety
+- [CacheWarmer](warmer.md) — pre-populate on startup
+- [Observability](observability.md) — Prometheus / OTEL export

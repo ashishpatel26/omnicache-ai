@@ -4,115 +4,107 @@ title: "Storage Backends"
 
 # Storage Backends
 
-OmniCache-AI provides five interchangeable storage backends -- three for key-value caching and two for vector similarity search. Every backend conforms to a `Protocol`, so you can swap implementations without changing application code.
+OmniCache-AI provides nine interchangeable backends — four key-value stores, one tiered backend, one async backend, and three vector similarity stores. Every backend conforms to a `Protocol`, so you can swap implementations without changing application code.
 
-## Overview
+---
 
-Backends are the persistence layer beneath every cache layer. Choosing the right one depends on your durability requirements, latency budget, deployment topology, and whether you need exact-match or semantic-similarity lookups.
+## Key-Value Backends (CacheBackend)
 
-OmniCache-AI defines two protocols in `omnicache_ai.backends.base`:
+| Backend | Class | Extras | Best For |
+|---|---|---|---|
+| [In-Memory (LRU)](memory.md) | `InMemoryBackend` | — (core) | Dev, testing, single-process |
+| [Async In-Memory](async-memory.md) | `AsyncInMemoryBackend` | — (core) | FastAPI, async LangGraph |
+| [Tiered (L1+L2)](tiered.md) | `TieredBackend` | — (core) | Memory speed + Redis persistence |
+| [Disk](disk.md) | `DiskBackend` | — (core) | Single-node persistence |
+| [Redis](redis.md) | `RedisBackend` | `[redis]` | Shared across processes / services |
 
-- **`CacheBackend`** -- key-value storage with optional TTL (implemented by InMemoryBackend, DiskBackend, RedisBackend).
-- **`VectorBackend`** -- vector similarity search over embedding spaces (implemented by FAISSBackend, ChromaBackend).
+## Vector Backends (VectorBackend)
 
-Both protocols are `@runtime_checkable`, so you can verify conformance with `isinstance()`.
+| Backend | Class | Extras | Best For |
+|---|---|---|---|
+| [FAISS](faiss.md) | `FAISSBackend` | `[vector-faiss]` | Fast in-process similarity |
+| [ChromaDB](chroma.md) | `ChromaBackend` | `[vector-chroma]` | Persistent vector store + metadata |
+| [Qdrant](qdrant.md) | `QdrantBackend` | `[vector-qdrant]` | Production scale (22ms p95) |
+| [Weaviate](weaviate.md) | `WeaviateBackend` | `[vector-weaviate]` | Hybrid search (vector + BM25) |
+
+---
 
 ## Decision Flowchart
 
-Use the diagram below to pick the right backend for your workload.
-
 ```mermaid
 flowchart TD
-    Start(["Choose a backend"]) --> Q1{"Need vector\nsimilarity search?"}
+    Start(["Which backend?"]) --> Q1{"Multiple processes\nor services?"}
 
-    Q1 -->|Yes| Q2{"Need persistence\nor metadata filtering?"}
-    Q1 -->|No| Q3{"Need data to\nsurvive restarts?"}
+    Q1 -->|Yes| Q1b{"Also need\nfast local reads?"}
+    Q1b -->|Yes| TIERED["TieredBackend\nL1=InMemory + L2=Redis"]
+    Q1b -->|No| REDIS["RedisBackend"]
 
-    Q2 -->|Yes| Chroma["ChromaBackend"]
-    Q2 -->|No| FAISS["FAISSBackend"]
+    Q1 -->|No| Q2{"Need vector\nsimilarity?"}
 
-    Q3 -->|No| Q4{"Single process\nor multi-threaded?"}
-    Q3 -->|Yes| Q5{"Multi-node or\nshared state?"}
+    Q2 -->|Yes| Q3{"Need hybrid\nsearch (vector+BM25)?"}
+    Q3 -->|Yes| WEAV["WeaviateBackend"]
+    Q3 -->|No| Q3b{"Production scale\n10M+ vectors?"}
+    Q3b -->|Yes| QDRANT["QdrantBackend"]
+    Q3b -->|No| Q3c{"Persist to disk?"}
+    Q3c -->|Yes| CHROMA["ChromaBackend"]
+    Q3c -->|No| FAISS["FAISSBackend"]
 
-    Q4 -->|Either| Memory["InMemoryBackend"]
+    Q2 -->|No| Q4{"Async framework?"}
+    Q4 -->|Yes| AMEM["AsyncInMemoryBackend"]
+    Q4 -->|No| Q5{"Survive restarts?"}
+    Q5 -->|Yes| DISK["DiskBackend"]
+    Q5 -->|No| MEM["InMemoryBackend"]
 
-    Q5 -->|Single node| Disk["DiskBackend"]
-    Q5 -->|Multi-node| Redis["RedisBackend"]
-
-    style Start fill:#4c1d95,color:#fff
-    style Memory fill:#1e3a5f,color:#fff
-    style Disk fill:#14532d,color:#fff
-    style Redis fill:#713f12,color:#fff
-    style FAISS fill:#7f1d1d,color:#fff
-    style Chroma fill:#4c1d95,color:#fff
+    style REDIS fill:#dc2626,color:#fff
+    style TIERED fill:#b45309,color:#fff
+    style FAISS fill:#2563eb,color:#fff
+    style CHROMA fill:#7c3aed,color:#fff
+    style QDRANT fill:#0e7490,color:#fff
+    style WEAV fill:#0f766e,color:#fff
+    style DISK fill:#d97706,color:#fff
+    style MEM fill:#059669,color:#fff
+    style AMEM fill:#047857,color:#fff
 ```
 
-## Comparison Table
-
-### Key-Value Backends (CacheBackend)
-
-| Feature | InMemoryBackend | DiskBackend | RedisBackend |
-|---|---|---|---|
-| **Persistence** | None (process lifetime) | Disk (survives restarts) | Redis server |
-| **Multi-process safe** | No | Yes (SQLite locking) | Yes (server-based) |
-| **Multi-node** | No | No | Yes |
-| **TTL support** | Yes (per-entry) | Yes (native) | Yes (native) |
-| **Eviction** | LRU (configurable max_size) | Size-based (size_limit) | Server-side policies |
-| **Optional dependency** | None | `diskcache` (core) | `redis` |
-| **Typical latency** | ~microseconds | ~milliseconds | ~milliseconds (network) |
-| **Best for** | Dev, testing, single-process | Single-node production | Distributed production |
-
-### Vector Backends (VectorBackend)
-
-| Feature | FAISSBackend | ChromaBackend |
-|---|---|---|
-| **Similarity metric** | Cosine (via L2-norm + inner product) | Cosine (native HNSW) |
-| **Persistence** | None (in-memory only) | Optional (PersistentClient) |
-| **Metadata filtering** | No | Yes (Chroma native) |
-| **Deletion support** | Soft (mapping removal) | Native |
-| **Optional dependency** | `faiss-cpu` | `chromadb` |
-| **Best for** | Fast in-process similarity | Production with persistence |
+---
 
 ## Protocols
 
-### CacheBackend Protocol
+Both protocols are `@runtime_checkable` — verify with `isinstance()`.
+
+### CacheBackend
 
 ```python
 from omnicache_ai.backends.base import CacheBackend
-
-# Methods every key-value backend must implement:
-# get(key: str) -> Any | None
-# set(key: str, value: Any, ttl: int | None = None) -> None
-# delete(key: str) -> None
-# exists(key: str) -> bool
-# clear() -> None
-# close() -> None
+# get / set / delete / exists / clear / close
 ```
 
-### VectorBackend Protocol
+### AsyncCacheBackend
+
+```python
+from omnicache_ai.backends.async_base import AsyncCacheBackend
+# async get / set / delete / exists / clear / close
+```
+
+### VectorBackend
 
 ```python
 from omnicache_ai.backends.base import VectorBackend
-
-# Methods every vector backend must implement:
-# add(key: str, vector: np.ndarray, metadata: dict[str, Any]) -> None
-# search(vector: np.ndarray, top_k: int = 1) -> list[tuple[str, float]]
-# delete(key: str) -> None
-# clear() -> None
-# close() -> None
+# add / search / delete / clear / close
 ```
 
-:::tip[Runtime protocol checking]
-Both protocols are decorated with `@runtime_checkable`, so you can write
-`isinstance(my_backend, CacheBackend)` to verify at runtime that an object
-conforms to the expected interface.
-:::
+---
 
+## Custom Backend
 
-## Backend Pages
+Implement the `CacheBackend` protocol — no inheritance required:
 
-- [InMemoryBackend](memory.md) -- Thread-safe LRU cache with TTL
-- [DiskBackend](disk.md) -- Persistent disk cache via diskcache
-- [RedisBackend](redis.md) -- Distributed cache via Redis
-- [FAISSBackend](faiss.md) -- Vector similarity with FAISS
-- [ChromaBackend](chroma.md) -- Vector similarity with ChromaDB
+```python
+class MyBackend:
+    def get(self, key: str): ...
+    def set(self, key: str, value, ttl=None): ...
+    def delete(self, key: str): ...
+    def exists(self, key: str) -> bool: ...
+    def clear(self): ...
+    def close(self): ...
+```

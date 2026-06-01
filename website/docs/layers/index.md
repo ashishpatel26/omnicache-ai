@@ -4,119 +4,75 @@ title: "Cache Layers"
 
 # Cache Layers
 
-OmniCache-AI ships five purpose-built cache layers. Each layer targets a distinct stage of the AI pipeline, uses optimized serialization for its data type, and exposes a consistent `get` / `set` / `get_or_*` interface backed by a shared `CacheManager`.
+OmniCache-AI ships eight purpose-built cache layers. Each targets a distinct stage of the AI pipeline with optimized serialization and a consistent `get` / `set` / `get_or_*` interface.
 
 ---
 
 ## At a Glance
 
-| Layer | Class | What it caches | Key Components | Serialization |
-|---|---|---|---|---|
-| [Response](response.md) | `ResponseCache` | LLM completions (any object) | model ID + messages hash + params hash | `pickle` |
-| [Embedding](embedding.md) | `EmbeddingCache` | Dense float32 vectors (`np.ndarray`) | text + model ID | `tobytes` / `frombuffer` |
-| [Retrieval](retrieval.md) | `RetrievalCache` | Document lists from retrievers | query + retriever ID + top_k | `pickle` |
-| [Context](context.md) | `ContextCache` | Conversation message history | session ID + turn index | `pickle` |
-| [Semantic](semantic.md) | `SemanticCache` | Any value, matched by meaning | exact key **or** cosine similarity | `pickle` |
+| Layer | Class | What it caches | Key |
+|---|---|---|---|
+| [Response](response.md) | `ResponseCache` | LLM completions | model + messages + params |
+| [Streaming](streaming.md) | `StreamingResponseCache` | Streaming LLM chunks (buffered) | model + messages + params |
+| [Embedding](embedding.md) | `EmbeddingCache` | `np.ndarray` vectors | text + model |
+| [Retrieval](retrieval.md) | `RetrievalCache` | Document lists | query + retriever + top_k |
+| [Context](context.md) | `ContextCache` | Conversation history | session ID + turn index |
+| [Semantic](semantic.md) | `SemanticCache` | Any value by meaning (exact + cosine) | exact key or vector similarity |
+| [Adaptive Semantic](adaptive-semantic.md) | `AdaptiveSemanticCache` | Semantic cache with auto-tuning threshold | same as SemanticCache |
+| [Prompt Cache](prompt-cache.md) | `PromptCacheLayer` | Provider cache_control injection + savings | — (wraps API calls) |
 
 ---
 
 ## Pipeline Diagram
 
-The layers form a cascading pipeline. A query enters at the top and falls through each layer until a cache hit is found or the live service is called.
-
 ```mermaid
 flowchart TD
-    Q(["Incoming Query"]) --> SC{"SemanticCache\n(exact + vector)"}
-    SC -->|hit| R(["Cached Response"])
+    Q(["Incoming Query"]) --> ASC{"AdaptiveSemanticCache\n(auto-tuning threshold)"}
+    ASC -->|hit| R(["Cached Response"])
+    ASC -->|miss| SC{"SemanticCache\n(exact + vector)"}
+    SC -->|hit| R
     SC -->|miss| RC{"ResponseCache\n(model + messages + params)"}
     RC -->|hit| R
-    RC -->|miss| RET{"RetrievalCache\n(query + retriever + top_k)"}
+    RC -->|miss| SRC{"StreamingResponseCache\n(buffered chunks)"}
+    SRC -->|hit| R
+    SRC -->|miss| RET{"RetrievalCache\n(query + retriever + top_k)"}
     RET -->|hit| R
     RET -->|miss| EC{"EmbeddingCache\n(text + model)"}
     EC -->|hit| R
     EC -->|miss| CC{"ContextCache\n(session + turn)"}
     CC -->|hit| R
-    CC -->|miss| LLM(["Live AI Service"])
-    LLM --> STORE["Store results in\napplicable layers"]
+    CC -->|miss| API["🤖 Live API Call\n+ PromptCacheLayer\n(cache_control injection)"]
+    API --> STORE["Store in applicable layers"]
     STORE --> R
 
+    style ASC fill:#1a3a2a,color:#fff
     style SC fill:#4c1d95,color:#fff
     style RC fill:#1e3a5f,color:#fff
+    style SRC fill:#1e2a4a,color:#fff
     style RET fill:#14532d,color:#fff
     style EC fill:#713f12,color:#fff
     style CC fill:#7f1d1d,color:#fff
 ```
 
-:::tip[You do not need every layer]
-Each layer is independent. Use only the layers relevant to your workload. A simple chatbot may need only `ResponseCache`, while a full RAG agent benefits from all five.
-:::
-
-
 ---
 
 ## Shared Design Principles
 
-All cache layers follow a common contract:
-
-1. **Constructor takes a `CacheManager`** (except `SemanticCache`, which wires its own backends directly).
-2. **`get(...)` returns `None` on miss** -- never raises on a cache miss.
-3. **`set(...)` accepts an optional `ttl`** -- when omitted, the `TTLPolicy` on the manager decides.
-4. **`get_or_*` convenience methods** combine lookup and computation in a single call, ensuring the result is stored before it is returned.
-5. **Keys are built via `CacheKeyBuilder`** -- deterministic, namespaced, and hash-truncated for readability.
-
----
-
-## How Layers Relate to Backends
-
-```
-+-----------------+       +-----------------+
-|  Cache Layer    | ----> |  CacheManager   |
-|  (ResponseCache,|       |                 |
-|   EmbeddingCache |       |  backend        | ---> InMemory / Disk / Redis
-|   etc.)         |       |  vector_backend | ---> FAISS / Chroma
-|                 |       |  key_builder    |
-+-----------------+       |  ttl_policy     |
-                          |  invalidation   |
-                          +-----------------+
-```
-
-Layers never talk to a backend directly. They delegate to `CacheManager`, which resolves TTL, builds keys, and routes to the appropriate storage backend.
-
-:::note[SemanticCache is the exception]
-`SemanticCache` accepts an `exact_backend` and a `vector_backend` directly, bypassing `CacheManager`. This gives it full control over the two-tier lookup flow.
-:::
-
-
----
-
-## Quick Setup
-
-```python
-from omnicache_ai import CacheManager, InMemoryBackend, CacheKeyBuilder
-from omnicache_ai.layers.response_cache import ResponseCache
-from omnicache_ai.layers.embedding_cache import EmbeddingCache
-from omnicache_ai.layers.retrieval_cache import RetrievalCache
-from omnicache_ai.layers.context_cache import ContextCache
-
-manager = CacheManager(
-    backend=InMemoryBackend(),
-    key_builder=CacheKeyBuilder(namespace="myapp"),
-)
-
-response_cache  = ResponseCache(manager)
-embedding_cache = EmbeddingCache(manager, dim=1536)
-retrieval_cache = RetrievalCache(manager)
-context_cache   = ContextCache(manager)
-```
-
-For `SemanticCache`, see the dedicated [SemanticCache page](semantic.md).
+1. **Constructor takes a `CacheManager`** — except `SemanticCache`/`AdaptiveSemanticCache` which wire their own backends.
+2. **`get(...)` returns `None` on miss** — never raises.
+3. **`set(...)` accepts optional `ttl`** — falls back to `TTLPolicy` when omitted.
+4. **`get_or_*` convenience methods** — compute + cache in one call.
+5. **Pluggable serializer** — all layers accept `serializer=` param.
 
 ---
 
 ## Next Steps
 
-- [ResponseCache](response.md) -- cache LLM completions
-- [EmbeddingCache](embedding.md) -- cache dense vectors
-- [RetrievalCache](retrieval.md) -- cache retriever results
-- [ContextCache](context.md) -- cache conversation history
-- [SemanticCache](semantic.md) -- meaning-aware caching (the core differentiator)
+- [ResponseCache](response.md) — cache LLM completions
+- [StreamingResponseCache](streaming.md) — cache streaming LLM output
+- [SemanticCache](semantic.md) — meaning-aware caching
+- [AdaptiveSemanticCache](adaptive-semantic.md) — auto-tuning threshold
+- [PromptCacheLayer](prompt-cache.md) — provider prompt cache integration
+- [EmbeddingCache](embedding.md) — cache dense vectors
+- [RetrievalCache](retrieval.md) — cache retriever results
+- [ContextCache](context.md) — cache conversation history
