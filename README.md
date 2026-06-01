@@ -858,9 +858,12 @@ omnicache_ai/
 
 ```bash
 # Clone and install with dev deps
-git clone https://github.com/your-org/omnicache-ai
+git clone https://github.com/ashishpatel26/omnicache-ai
 cd omnicache-ai
 uv sync --dev
+
+# Install pre-commit hooks (runs automatically on every commit)
+uv run pre-commit install
 
 # Run all tests
 uv run pytest
@@ -868,11 +871,8 @@ uv run pytest
 # With coverage report
 uv run pytest --cov=omnicache_ai --cov-report=term-missing
 
-# Lint
-uv run ruff check omnicache_ai
-
-# Type check
-uv run mypy omnicache_ai
+# Lint + format + type check (via pre-commit)
+uv run pre-commit run --all-files
 
 # Run specific layer tests
 uv run pytest tests/layers/ tests/core/ -v
@@ -880,6 +880,32 @@ uv run pytest tests/layers/ tests/core/ -v
 # Run adapter tests (requires optional deps)
 uv run pytest tests/adapters/ -v
 ```
+
+---
+
+## Contributing
+
+We welcome contributions of all kinds — bug fixes, new backends, new adapters, documentation, and performance improvements.
+
+| File | Purpose |
+| ---- | ------- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Full dev setup, coding standards, how to add backends/adapters |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 — community standards |
+| [.github/ISSUE_TEMPLATE/bug_report.yml](.github/ISSUE_TEMPLATE/bug_report.yml) | Structured bug report with version, backend, reproduction fields |
+| [.github/ISSUE_TEMPLATE/feature_request.yml](.github/ISSUE_TEMPLATE/feature_request.yml) | Feature request with area dropdown, motivation, solution fields |
+| [.github/pull_request_template.md](.github/pull_request_template.md) | PR checklist: type, changes, tests, breaking changes |
+
+**Quick start for contributors:**
+
+```bash
+git clone https://github.com/ashishpatel26/omnicache-ai
+cd omnicache-ai
+uv sync --dev
+uv run pre-commit install
+uv run pytest  # all green before you start
+```
+
+Open an issue or [Discussion](https://github.com/ashishpatel26/omnicache-ai/discussions) before starting large changes.
 
 ---
 
