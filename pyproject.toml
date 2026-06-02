@@ -55,9 +55,12 @@ google-adk = ["google-adk>=0.1"]
 llamaindex = ["llama-index-core>=0.10"]
 vector-qdrant = ["qdrant-client>=1.7"]
 vector-weaviate = ["weaviate-client>=4.0"]
+vector-pinecone = ["pinecone-client>=3.0"]
+mistral = ["mistralai>=1.0"]
+gemini = ["google-generativeai>=0.5"]
 observability = ["prometheus-client>=0.20", "opentelemetry-sdk>=1.20", "opentelemetry-exporter-otlp-proto-grpc>=1.20"]
 all = [
-    "omnicache-ai[redis,vector-faiss,vector-chroma,vector-qdrant,langchain,langgraph,autogen,crewai,agno,a2a,openai,anthropic,google-adk,llamaindex,observability]",
+    "omnicache-ai[redis,vector-faiss,vector-chroma,vector-qdrant,vector-pinecone,langchain,langgraph,autogen,crewai,agno,a2a,openai,anthropic,mistral,gemini,google-adk,llamaindex,observability]",
 ]
 dev = [
     "pytest>=8.0",
@@ -95,6 +98,7 @@ warn_unused_ignores = false
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--cov=omnicache_ai --cov-fail-under=70"
+python_files = ["test_*.py", "bench_*.py"]
 
 [dependency-groups]
 dev = [
@@ -106,4 +110,5 @@ dev = [
     "mkdocs-material>=9.7.6",
     "mkdocs-minify-plugin>=0.8.0",
     "pre-commit>=3.7",
+    "pytest-benchmark>=5.2.3",
 ]

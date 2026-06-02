@@ -143,5 +143,7 @@ nav:
     - Tag Invalidation: cookbook/invalidation.md
     - TTL Policies: cookbook/ttl.md
     - Multi-Framework: cookbook/multi-framework.md
+  - Migration:
+    - From GPTCache: migration-from-gptcache.md
   - API Reference:
     - api-reference/index.md
