@@ -46,6 +46,7 @@ const sidebars: SidebarsConfig = {
         'backends/chroma',
         'backends/qdrant',
         'backends/weaviate',
+        'backends/pinecone',
       ],
     },
     {
@@ -80,6 +81,8 @@ const sidebars: SidebarsConfig = {
       items: [
         'adapters/openai-sdk',
         'adapters/anthropic-sdk',
+        'adapters/mistral',
+        'adapters/gemini',
         'adapters/google-adk',
         'adapters/openai-agents',
         'adapters/llamaindex',
@@ -108,6 +111,8 @@ const sidebars: SidebarsConfig = {
         'cookbook/a2a',
         'cookbook/openai-sdk',
         'cookbook/anthropic-sdk',
+        'cookbook/mistral',
+        'cookbook/gemini',
         'cookbook/google-adk',
         'cookbook/openai-agents',
         'cookbook/llamaindex',
