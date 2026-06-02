@@ -1,0 +1,79 @@
+Retrieval-Augmented Generation (RAG)
+
+Retrieval-Augmented Generation (RAG) is an AI technique that combines information retrieval with large language model generation. Instead of relying solely on the knowledge encoded in a model's parameters during training, RAG systems retrieve relevant documents from an external knowledge base at inference time and use them as additional context when generating a response.
+
+The key insight behind RAG is that language models can leverage retrieved information effectively, even if that information was not present in the training data. This makes RAG particularly useful for tasks requiring up-to-date information, domain-specific knowledge, or private organizational data.
+
+A typical RAG pipeline consists of three stages: indexing, retrieval, and generation. During indexing, documents are split into chunks, converted into dense vector embeddings, and stored in a vector database. During retrieval, the user query is embedded using the same embedding model, and the most semantically similar document chunks are fetched using approximate nearest-neighbor search. During generation, the retrieved chunks are provided as context to the language model along with the original query.
+
+---
+
+Vector Similarity Search and Embeddings
+
+Vector similarity search is the core mechanism enabling semantic retrieval in RAG systems. Text is converted into dense numerical vectors (embeddings) that capture semantic meaning. Semantically similar texts produce vectors that are close together in the embedding space, typically measured by cosine similarity or dot product.
+
+Embedding models are neural networks trained to map text into a high-dimensional vector space. Popular embedding models include OpenAI's text-embedding-ada-002, Sentence-BERT, and Nomic's nomic-embed-text. The dimensionality of embeddings typically ranges from 384 to 1536 dimensions.
+
+FAISS (Facebook AI Similarity Search) is an open-source library for efficient similarity search over dense vectors. It supports exact search via IndexFlatIP (inner product) and approximate search via IndexIVFFlat or HNSW indices. FAISS can handle billions of vectors and is widely used in production RAG systems.
+
+Qdrant and Weaviate are managed vector databases that provide similarity search as a service. They support filtering, metadata storage, and hybrid search combining dense vectors with traditional keyword matching (BM25). Qdrant achieves 22ms p95 latency at 10 million vectors.
+
+---
+
+Caching in AI Pipelines
+
+Caching is a critical optimization for production AI pipelines. Without caching, every user request triggers expensive API calls to embedding models and large language models. For applications with repeated or similar queries, the costs can be prohibitive.
+
+There are several layers where caching can be applied in a RAG system. Embedding caching stores the vector representation of text chunks and queries so that identical or previously seen text does not need to be re-embedded. Retrieval caching stores the mapping from a query string to its retrieved document set, avoiding repeated vector searches for the same question. Response caching stores the final generated answer keyed by the model, system prompt, context, and user question.
+
+Semantic caching extends response caching by using vector similarity to match new queries against previously answered questions. If a new query is semantically similar (above a cosine similarity threshold) to a cached query, the stored answer is returned directly. This dramatically increases the effective cache hit rate beyond exact-match caching.
+
+OmniCache-AI is a Python library that provides all of these caching layers out of the box. It supports multiple storage backends (in-memory, disk, Redis), multiple vector backends (FAISS, ChromaDB, Qdrant, Weaviate, Pinecone), and adapters for 13 AI frameworks including LangChain, LangGraph, AutoGen, CrewAI, OpenAI SDK, and Anthropic SDK.
+
+---
+
+Ollama: Local LLM Inference
+
+Ollama is an open-source tool for running large language models locally. It provides a simple REST API at http://localhost:11434 with endpoints for chat completion and embeddings. Ollama supports models including Llama 3.2, Mistral, Gemma 2, Phi-3.5, and dozens of others.
+
+The key advantage of Ollama is privacy: all inference happens on-device with no data sent to external servers. This makes it ideal for enterprise use cases involving sensitive documents or regulated data.
+
+Ollama exposes a POST /api/chat endpoint for conversational generation and a POST /api/embeddings endpoint for producing text embeddings. The API is compatible with the OpenAI chat completions format when using the /v1/ prefix, enabling use with any OpenAI-compatible client library.
+
+Running models locally with Ollama means latency depends on hardware. On Apple Silicon (M-series chips), models like Llama 3.2:3b run at approximately 50-80 tokens/second. On NVIDIA GPUs, performance scales with VRAM — an RTX 4090 can run 7B-parameter models at 100+ tokens/second.
+
+---
+
+Benefits of Combining RAG with Caching
+
+Combining RAG with multi-layer caching produces compounding benefits. The first request for a given question incurs full cost: embedding (10-50ms), FAISS search (<1ms for small indices), and LLM generation (1-10 seconds depending on model and hardware). All subsequent identical or semantically similar requests are served from cache in under 1 millisecond.
+
+For applications processing thousands of queries per day with significant query repetition (common in customer support, documentation Q&A, and internal knowledge base tools), caching can reduce API costs by 40-70% and reduce average response latency by over 90%.
+
+Cache hit rates in production RAG systems typically range from 20-45% for general-purpose assistants and up to 80% for domain-specific tools where users ask similar questions repeatedly. Semantic caching further increases effective hit rates by 10-20 percentage points compared to exact-match caching.
+
+The OmniCache-AI library provides a TieredBackend that combines in-memory (L1) and disk (L2) caching. Hot cache entries are served from memory in microseconds, while cold entries are loaded from disk in milliseconds. This architecture provides both the speed of memory caching and the persistence of disk-based storage without requiring a Redis server.
+
+---
+
+Chunking Strategies for RAG
+
+Document chunking is the process of splitting source documents into segments that are small enough to fit in the LLM context window while preserving enough semantic coherence to be useful. Poor chunking is one of the most common causes of poor RAG performance.
+
+Fixed-size chunking splits text into chunks of N words or characters regardless of content boundaries. It is simple to implement but can split sentences and paragraphs in the middle, reducing semantic coherence. A chunk size of 300-500 words with 50-word overlap is a common starting point.
+
+Semantic chunking splits text at natural boundaries such as paragraph breaks, section headings, or sentence endings. This produces more coherent chunks at the cost of variable chunk sizes. Recursive character text splitting (used by LangChain) attempts semantic splitting by trying multiple separators in order: double newline, single newline, period, space.
+
+Sentence-window chunking stores individual sentences but retrieves them with surrounding context (a window of adjacent sentences). This allows precise retrieval while providing enough context for generation.
+
+Parent-document retrieval stores small chunks for precise matching but returns the parent document section when a match is found. This gives the LLM more context without reducing retrieval precision.
+
+---
+
+Evaluation of RAG Systems
+
+RAG systems are evaluated on two dimensions: retrieval quality and generation quality. Retrieval quality measures whether the correct documents are retrieved for a given query, using metrics such as Recall@K, Precision@K, and Mean Reciprocal Rank (MRR). Generation quality measures whether the generated answer is accurate, relevant, and grounded in the retrieved context.
+
+Common generation quality metrics include faithfulness (is the answer supported by the context?), answer relevance (does the answer address the question?), and context relevance (are the retrieved chunks relevant to the question?). The RAGAS framework provides automated metrics for all three dimensions.
+
+Hallucination — when the model generates information not present in the context — is the primary failure mode of RAG systems. It occurs when retrieval fails to surface relevant documents, the context is too long and the model loses focus, or the model's parametric knowledge overrides the retrieved context. Reducing hallucination requires a combination of better retrieval, appropriate chunk sizes, and prompt engineering.
