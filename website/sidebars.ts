@@ -129,6 +129,14 @@ const sidebars: SidebarsConfig = {
       ],
     },
     {
+      type: 'category',
+      label: 'Examples',
+      link: { type: 'generated-index', title: 'Examples' },
+      items: [
+        'examples/rag-ollama',
+      ],
+    },
+    {
       type: 'doc',
       id: 'api-reference/index',
       label: 'API Reference',
