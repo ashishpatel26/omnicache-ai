@@ -47,27 +47,29 @@ flowchart TD
 
 ### Key-Value Backends (CacheBackend)
 
-| Feature | InMemoryBackend | DiskBackend | RedisBackend |
-|---|---|---|---|
-| **Persistence** | None (process lifetime) | Disk (survives restarts) | Redis server |
-| **Multi-process safe** | No | Yes (SQLite locking) | Yes (server-based) |
-| **Multi-node** | No | No | Yes |
-| **TTL support** | Yes (per-entry) | Yes (native) | Yes (native) |
-| **Eviction** | LRU (configurable max_size) | Size-based (size_limit) | Server-side policies |
-| **Optional dependency** | None | `diskcache` (core) | `redis` |
-| **Typical latency** | ~microseconds | ~milliseconds | ~milliseconds (network) |
-| **Best for** | Dev, testing, single-process | Single-node production | Distributed production |
+| Feature | InMemory | AsyncInMemory | Disk | Redis | Tiered |
+|---|---|---|---|---|---|
+| **Persistence** | None | None | Disk | Redis | L2 backend |
+| **Async native** | No | Yes | No | No | No |
+| **Multi-process** | No | No | Yes | Yes | Depends on L2 |
+| **Multi-node** | No | No | No | Yes | Depends on L2 |
+| **TTL support** | Yes | Yes | Yes | Yes | Yes |
+| **Eviction** | LRU | LRU | Size-based | Server policy | L1: LRU |
+| **Extra** | core | core | core | `[redis]` | core |
+| **Latency** | ~µs | ~µs | ~ms | ~ms (network) | L1: ~µs |
 
 ### Vector Backends (VectorBackend)
 
-| Feature | FAISSBackend | ChromaBackend |
-|---|---|---|
-| **Similarity metric** | Cosine (via L2-norm + inner product) | Cosine (native HNSW) |
-| **Persistence** | None (in-memory only) | Optional (PersistentClient) |
-| **Metadata filtering** | No | Yes (Chroma native) |
-| **Deletion support** | Soft (mapping removal) | Native |
-| **Optional dependency** | `faiss-cpu` | `chromadb` |
-| **Best for** | Fast in-process similarity | Production with persistence |
+| Feature | FAISS | Chroma | Qdrant | Weaviate | Pinecone |
+|---|---|---|---|---|---|
+| **Similarity metric** | Cosine | Cosine | Cosine | Cosine | Cosine |
+| **Persistence** | None | Optional | Optional | Cloud/local | Serverless |
+| **Deletion support** | Soft | Native | Native | Native | Native |
+| **Metadata filtering** | No | Yes | Yes | Yes | Yes |
+| **Hybrid search** | No | No | No | Yes | No |
+| **Cloud-managed** | No | No | Yes | Yes | Yes |
+| **Extra** | `[vector-faiss]` | `[vector-chroma]` | `[vector-qdrant]` | `[vector-weaviate]` | `[vector-pinecone]` |
+| **Best for** | In-process, dev | Persistent local | Production scale | Hybrid search | Serverless cloud |
 
 ## Protocols
 
@@ -105,8 +107,18 @@ from omnicache_ai.backends.base import VectorBackend
 
 ## Backend Pages
 
+**Key-value:**
+
 - [InMemoryBackend](memory.md) -- Thread-safe LRU cache with TTL
+- [AsyncInMemoryBackend](async-memory.md) -- Async-native LRU for async frameworks
 - [DiskBackend](disk.md) -- Persistent disk cache via diskcache
 - [RedisBackend](redis.md) -- Distributed cache via Redis
-- [FAISSBackend](faiss.md) -- Vector similarity with FAISS
-- [ChromaBackend](chroma.md) -- Vector similarity with ChromaDB
+- [TieredBackend](tiered.md) -- L1 (memory) + L2 (any backend) two-tier caching
+
+**Vector similarity:**
+
+- [FAISSBackend](faiss.md) -- Fast in-process vector search
+- [ChromaBackend](chroma.md) -- Persistent vector store with metadata
+- [QdrantBackend](qdrant.md) -- Production vector DB (22ms p95 at 10M vectors)
+- [WeaviateBackend](weaviate.md) -- Native hybrid search (vector + BM25)
+- [PineconeBackend](pinecone.md) -- Serverless managed vector search

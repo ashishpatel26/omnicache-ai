@@ -13,6 +13,9 @@ OmniCache-AI ships five purpose-built cache layers. Each layer targets a distinc
 | [Retrieval](retrieval.md) | `RetrievalCache` | Document lists from retrievers | query + retriever ID + top_k | `pickle` |
 | [Context](context.md) | `ContextCache` | Conversation message history | session ID + turn index | `pickle` |
 | [Semantic](semantic.md) | `SemanticCache` | Any value, matched by meaning | exact key **or** cosine similarity | `pickle` |
+| [Adaptive Semantic](adaptive-semantic.md) | `AdaptiveSemanticCache` | Extends SemanticCache with self-tuning threshold | cosine similarity + multi-turn guard | `pickle` |
+| [Streaming](streaming-response.md) | `StreamingResponseCache` | Streamed LLM chunks buffered and replayed | messages + model + params | `pickle` |
+| [Prompt Cache](prompt-cache.md) | `PromptCacheLayer` | Provider-level prefix caching (Anthropic/OpenAI) | Injects `cache_control`; tracks savings | — |
 
 ---
 
@@ -112,3 +115,6 @@ For `SemanticCache`, see the dedicated [SemanticCache page](semantic.md).
 - [RetrievalCache](retrieval.md) -- cache retriever results
 - [ContextCache](context.md) -- cache conversation history
 - [SemanticCache](semantic.md) -- meaning-aware caching (the core differentiator)
+- [AdaptiveSemanticCache](adaptive-semantic.md) -- self-tuning threshold for production
+- [StreamingResponseCache](streaming-response.md) -- cache streaming LLM responses
+- [PromptCacheLayer](prompt-cache.md) -- provider-level prefix caching + savings tracking

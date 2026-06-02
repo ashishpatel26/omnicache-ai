@@ -201,4 +201,4 @@ manager = CacheManager(
 
 - [GitHub Issues](https://github.com/ashishpatel26/omnicache-ai/issues)
 - [Documentation](https://ashishpatel26.github.io/omnicache-ai/)
-- [Quick Start](../getting-started/quickstart.md)
+- [Quick Start](getting-started/quickstart.md)

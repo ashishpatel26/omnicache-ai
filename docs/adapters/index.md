@@ -27,14 +27,30 @@ flowchart LR
 
 ## Framework Support Matrix
 
+### Provider / SDK Adapters
+
+| Adapter | Provider | Extra | Hook point |
+|---|---|---|---|
+| [`OpenAICacheAdapter`](openai.md) | OpenAI | `[openai]` | `client.chat.completions.create` |
+| [`AnthropicCacheAdapter`](anthropic.md) | Anthropic | `[anthropic]` | `client.messages.create` |
+| [`MistralCacheAdapter`](mistral.md) | Mistral AI | `[mistral]` | `client.chat.complete` |
+| [`GeminiCacheAdapter`](gemini.md) | Google Gemini | `[gemini]` | `model.generate_content` |
+
+### Agent Framework Adapters
+
 | Adapter | Framework | Min Version | Extra | Interface |
 |---|---|---|---|---|
-| [`LangChainCacheAdapter`](langchain.md) | LangChain | `langchain-core >= 0.2` | `pip install 'omnicache-ai[langchain]'` | `BaseCache` |
-| [`LangGraphCacheAdapter`](langgraph.md) | LangGraph | `langgraph >= 0.1` | `pip install 'omnicache-ai[langgraph]'` | `BaseCheckpointSaver` |
-| [`AutoGenCacheAdapter`](autogen.md) | AutoGen | `pyautogen >= 0.2` or `autogen-agentchat >= 0.4` | `pip install 'omnicache-ai[autogen]'` | Agent wrapper |
-| [`CrewAICacheAdapter`](crewai.md) | CrewAI | `crewai >= 0.28` | `pip install 'omnicache-ai[crewai]'` | Crew wrapper |
-| [`AgnoCacheAdapter`](agno.md) | Agno | `agno >= 0.1` | `pip install 'omnicache-ai[agno]'` | Agent wrapper |
-| [`A2ACacheAdapter`](a2a.md) | A2A (Agent-to-Agent) | -- | `pip install omnicache-ai` | Handler wrapper / decorator |
+| [`LangChainCacheAdapter`](langchain.md) | LangChain | `langchain-core >= 0.2` | `[langchain]` | `BaseCache` |
+| [`LangGraphCacheAdapter`](langgraph.md) | LangGraph | `langgraph >= 0.1` | `[langgraph]` | `BaseCheckpointSaver` |
+| [`AutoGenCacheAdapter`](autogen.md) | AutoGen | `pyautogen >= 0.2` or `autogen-agentchat >= 0.4` | `[autogen]` | Agent wrapper |
+| [`CrewAICacheAdapter`](crewai.md) | CrewAI | `crewai >= 0.28` | `[crewai]` | Crew wrapper |
+| [`AgnoCacheAdapter`](agno.md) | Agno | `agno >= 0.1` | `[agno]` | Agent wrapper |
+| [`A2ACacheAdapter`](a2a.md) | A2A / Custom | — | core | Handler / decorator |
+| [`LlamaIndexLLMCacheAdapter`](llamaindex.md) | LlamaIndex | `llama-index-core >= 0.10` | `[llamaindex]` | LLM wrapper |
+| [`LlamaIndexQueryCacheAdapter`](llamaindex.md) | LlamaIndex | `llama-index-core >= 0.10` | `[llamaindex]` | QueryEngine wrapper |
+| [`GoogleADKCacheAdapter`](google-adk.md) | Google ADK | `google-adk >= 0.1` | `[google-adk]` | Agent wrapper |
+| [`OpenAIAgentsCacheAdapter`](openai-agents.md) | OpenAI Agents SDK | `openai-agents` | core | Runner wrapper |
+| [`ClaudeAgentCacheAdapter`](claude-agent.md) | Claude Agent SDK | `claude-code-sdk` | core | Async generator wrapper |
 
 ---
 
@@ -86,22 +102,26 @@ cached_agent.run("hello")  # cache-aware
 
 | If you use... | Use this adapter | Why |
 |---|---|---|
-| `langchain` LLMs / chat models | [`LangChainCacheAdapter`](langchain.md) | Implements `BaseCache` -- set it globally via `set_llm_cache()` |
+| `openai` Python SDK | [`OpenAICacheAdapter`](openai.md) | Wraps `chat.completions.create` with full async support |
+| `anthropic` Python SDK | [`AnthropicCacheAdapter`](anthropic.md) | Wraps `messages.create`; system prompt is part of key |
+| `mistralai` Python SDK | [`MistralCacheAdapter`](mistral.md) | Wraps `chat.complete` / `complete_async` |
+| `google.generativeai` SDK | [`GeminiCacheAdapter`](gemini.md) | Wraps `generate_content` / `generate_content_async` |
+| `langchain` LLMs / chat models | [`LangChainCacheAdapter`](langchain.md) | Implements `BaseCache` -- set globally via `set_llm_cache()` |
 | `langgraph` state graphs | [`LangGraphCacheAdapter`](langgraph.md) | Implements `BaseCheckpointSaver` -- pass to `compile(checkpointer=...)` |
-| `pyautogen` 0.2.x agents | [`AutoGenCacheAdapter`](autogen.md) | Wraps `generate_reply()` with caching |
-| `autogen-agentchat` 0.4+ agents | [`AutoGenCacheAdapter`](autogen.md) | Wraps `run()` / `arun()` with caching |
+| `pyautogen` / `autogen-agentchat` | [`AutoGenCacheAdapter`](autogen.md) | Wraps `generate_reply()` / `run()` / `arun()` |
 | `crewai` crews | [`CrewAICacheAdapter`](crewai.md) | Wraps `kickoff()` / `kickoff_async()` |
 | `agno` agents | [`AgnoCacheAdapter`](agno.md) | Wraps `run()` / `arun()` |
 | Custom A2A / inter-agent messaging | [`A2ACacheAdapter`](a2a.md) | Wraps any handler via `process()` or `@wrap` decorator |
+| LlamaIndex LLMs / query engines | [`LlamaIndexLLMCacheAdapter`](llamaindex.md) | Drop-in LLM replacement; streaming bypasses cache |
+| Google ADK agents | [`GoogleADKCacheAdapter`](google-adk.md) | Wraps `agent.run()` / `run_async()` |
+| OpenAI Agents SDK | [`OpenAIAgentsCacheAdapter`](openai-agents.md) | Wraps `Runner.run_sync` / `Runner.run` |
+| Claude Code / Agent SDK | [`ClaudeAgentCacheAdapter`](claude-agent.md) | Caches async generator output; replays on hit |
 | Custom LLM functions (no framework) | [Middleware](../middleware/index.md) | Use `LLMMiddleware` or `AsyncLLMMiddleware` directly |
 
 ---
 
 ## Next Steps
 
-- [LangChain Adapter](langchain.md) -- Global LLM cache for LangChain
-- [LangGraph Adapter](langgraph.md) -- Checkpoint persistence for state graphs
-- [AutoGen Adapter](autogen.md) -- Cached agent replies for both API generations
-- [CrewAI Adapter](crewai.md) -- Cached crew kickoff results
-- [Agno Adapter](agno.md) -- Cached agent runs
-- [A2A Adapter](a2a.md) -- Cached inter-agent messaging
+**Provider adapters:** [OpenAI](openai.md) · [Anthropic](anthropic.md) · [Mistral](mistral.md) · [Gemini](gemini.md)
+
+**Framework adapters:** [LangChain](langchain.md) · [LangGraph](langgraph.md) · [AutoGen](autogen.md) · [CrewAI](crewai.md) · [Agno](agno.md) · [A2A](a2a.md) · [LlamaIndex](llamaindex.md) · [Google ADK](google-adk.md) · [OpenAI Agents](openai-agents.md) · [Claude Agent](claude-agent.md)

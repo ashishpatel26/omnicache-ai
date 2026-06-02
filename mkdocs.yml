@@ -105,10 +105,15 @@ nav:
   - Backends:
     - Overview: backends/index.md
     - InMemoryBackend: backends/memory.md
+    - AsyncInMemoryBackend: backends/async-memory.md
     - DiskBackend: backends/disk.md
     - RedisBackend: backends/redis.md
+    - TieredBackend: backends/tiered.md
     - FAISSBackend: backends/faiss.md
     - ChromaBackend: backends/chroma.md
+    - QdrantBackend: backends/qdrant.md
+    - WeaviateBackend: backends/weaviate.md
+    - PineconeBackend: backends/pinecone.md
   - Cache Layers:
     - Overview: layers/index.md
     - ResponseCache: layers/response.md
@@ -116,6 +121,9 @@ nav:
     - RetrievalCache: layers/retrieval.md
     - ContextCache: layers/context.md
     - SemanticCache: layers/semantic.md
+    - AdaptiveSemanticCache: layers/adaptive-semantic.md
+    - StreamingResponseCache: layers/streaming-response.md
+    - PromptCacheLayer: layers/prompt-cache.md
   - Middleware:
     - Overview: middleware/index.md
     - LLMMiddleware: middleware/llm.md
@@ -123,12 +131,20 @@ nav:
     - RetrieverMiddleware: middleware/retriever.md
   - Adapters:
     - Overview: adapters/index.md
+    - OpenAI: adapters/openai.md
+    - Anthropic: adapters/anthropic.md
+    - Mistral: adapters/mistral.md
+    - Gemini: adapters/gemini.md
     - LangChain: adapters/langchain.md
     - LangGraph: adapters/langgraph.md
     - AutoGen: adapters/autogen.md
     - CrewAI: adapters/crewai.md
     - Agno: adapters/agno.md
     - A2A: adapters/a2a.md
+    - LlamaIndex: adapters/llamaindex.md
+    - Google ADK: adapters/google-adk.md
+    - OpenAI Agents: adapters/openai-agents.md
+    - Claude Agent SDK: adapters/claude-agent.md
   - Cookbook:
     - Overview: cookbook/index.md
     - Core Recipes: cookbook/core.md
@@ -143,6 +159,7 @@ nav:
     - Tag Invalidation: cookbook/invalidation.md
     - TTL Policies: cookbook/ttl.md
     - Multi-Framework: cookbook/multi-framework.md
+    - Runnable Examples: cookbook/runnable-examples.md
   - Migration:
     - From GPTCache: migration-from-gptcache.md
   - API Reference:
