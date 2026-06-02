@@ -7,9 +7,11 @@
   Drop it in front of any LLM call, embedding, retrieval query, or agent workflow<br/>
   to eliminate redundant API calls and cut latency and cost.</p>
 
+[![PyPI version](https://img.shields.io/pypi/v/omnicache-ai?logo=pypi&logoColor=white&color=orange)](https://pypi.org/project/omnicache-ai/)
 [![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyPI](https://img.shields.io/badge/PyPI-omnicache--ai-orange?logo=pypi&logoColor=white)](https://pypi.org/project/omnicache-ai/)
+[![CI](https://github.com/ashishpatel26/omnicache-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/ashishpatel26/omnicache-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
+[![Downloads](https://img.shields.io/pypi/dm/omnicache-ai?color=blue)](https://pypi.org/project/omnicache-ai/)
 [![LangChain](https://img.shields.io/badge/LangChain-1.x-1C3C3C?logo=langchain)](https://python.langchain.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.x-1C3C3C)](https://langchain-ai.github.io/langgraph/)
 [![AutoGen](https://img.shields.io/badge/AutoGen-0.4%2B-0078D4?logo=microsoft)](https://microsoft.github.io/autogen/)
@@ -23,6 +25,7 @@
 ## Table of Contents
 
 - [Why omnicache-ai?](#why-omnicache-ai)
+- [vs. GPTCache / LiteLLM / redis-vl](#vs-gptcache--litellm--redis-vl)
 - [Key Features](#key-features)
 - [AI Agent Pipeline Architecture](#ai-agent-pipeline-architecture)
 - [Installation](#installation)
@@ -49,6 +52,27 @@ Every AI agent pipeline makes the same expensive calls repeatedly:
 | Vector search re-run for same queries           | Retrieval results cached by query + top-k         |
 | Agent state lost between runs                   | Session context persisted across turns            |
 | Semantically identical questions treated as new | Cosine similarity match returns cached answer     |
+
+---
+
+## vs. GPTCache / LiteLLM / redis-vl
+
+**GPTCache** (8k ⭐) was the closest open-source competitor — but it has been effectively unmaintained since 2024. omnicache-ai fills that gap with a far more complete, modern, and actively maintained solution.
+
+| Feature | omnicache-ai | GPTCache | LiteLLM | redis-vl |
+|---|---|---|---|---|
+| 13 framework adapters | ✅ | 3 | 1 (gateway) | ❌ |
+| Adaptive semantic threshold | ✅ | ❌ | ❌ | ❌ |
+| Streaming cache | ✅ | ❌ | ❌ | ❌ |
+| Tiered backend (L1 + L2) | ✅ | ❌ | ❌ | ❌ |
+| Stampede protection | ✅ | ❌ | ❌ | ❌ |
+| Provider prompt cache tracking | ✅ | ❌ | partial | ❌ |
+| Qdrant + Weaviate backends | ✅ | ❌ | ❌ | ❌ |
+| Prometheus + OTEL export | ✅ | ❌ | ✅ | ❌ |
+| Multi-tenant namespacing | ✅ | ❌ | ❌ | ❌ |
+| Actively maintained (2026) | ✅ | ❌ dead | ✅ | ✅ |
+
+**LiteLLM** is a gateway/proxy (different problem domain). **redis-vl** is Redis-only with no framework adapters. **GPTCache** is the direct predecessor — omnicache-ai is what GPTCache should have become.
 
 ---
 
