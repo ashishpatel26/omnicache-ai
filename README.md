@@ -11,7 +11,7 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/ashishpatel26/omnicache-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/ashishpatel26/omnicache-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
-[![Downloads](https://img.shields.io/pepy/dt/omnicache-ai?color=blue)](https://pepy.tech/project/omnicache-ai)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/omnicache-ai?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/omnicache-ai)
 [![LangChain](https://img.shields.io/badge/LangChain-1.x-1C3C3C?logo=langchain)](https://python.langchain.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.x-1C3C3C)](https://langchain-ai.github.io/langgraph/)
 [![AutoGen](https://img.shields.io/badge/AutoGen-0.4%2B-0078D4?logo=microsoft)](https://microsoft.github.io/autogen/)
